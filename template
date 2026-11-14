@@ -1,0 +1,17 @@
+# Template file for 'tundra-borealis'
+pkgname=tundra-borealis
+version=0.1
+revision=0
+build_style=gnu-makefile
+# The integration tests run a compositor and its clients
+make_check_target=check-unit
+hostmakedepends="pkg-config wayland-devel"
+makedepends="wlroots0.20-devel wayland-devel libxkbcommon-devel libinput-devel
+ pixman-devel"
+depends="wlroots0.20"
+short_desc="Compositor of Tundra OS"
+maintainer="CarlosDZ <none@example.com>"
+license="GPL-3.0-or-later"
+homepage="https://github.com/CarlosDZ/tundra-borealis"
+distfiles="https://github.com/CarlosDZ/tundra-borealis/archive/refs/tags/v${version}_${revision}.tar.gz"
+checksum=@@CHECKSUM@@
