@@ -8,8 +8,17 @@ TUNDRA_STD  = -std=c11
 TUNDRA_DEFS = -D_GNU_SOURCE -DWLR_USE_UNSTABLE \
               -DTUNDRA_BOREALIS_VERSION=\"$(VERSION)\"
 TUNDRA_INC  = -Isrc
+TUNDRA_LIBS = -ltundra-conf
 TUNDRA_WL_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(TUNDRA_PKGS))
 TUNDRA_WL_LIBS   = $(shell $(PKG_CONFIG) --libs $(TUNDRA_PKGS))
+
+CONF_DEV ?= $(wildcard ../tundra-libconf)
+ifneq ($(CONF_DEV),)
+CONF_BUILD   = $(abspath $(CONF_DEV))/build
+TUNDRA_INC  += -I$(CONF_DEV)/include
+TUNDRA_LIBS := -L$(CONF_BUILD) $(TUNDRA_LIBS)
+TEST_RPATH   = -Wl,-rpath,$(CONF_BUILD)
+endif
 
 CFLAGS ?= -Wall -Wextra -O2
 
@@ -22,7 +31,7 @@ OBJS = $(SRCS:src/%.c=$(BUILD)/%.o)
 DEPS = $(OBJS:.o=.d)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(TUNDRA_WL_LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(TUNDRA_LIBS) $(TUNDRA_WL_LIBS)
 
 $(BUILD)/%.o: src/%.c
 	@mkdir -p $(dir $@)
@@ -45,13 +54,31 @@ TEST_DEFS = -D_GNU_SOURCE -DWLR_USE_UNSTABLE -DTUNDRA_BOREALIS_TEST \
 $(TEST_BIN): FORCE
 	@mkdir -p $(dir $@)
 	$(CC) $(TUNDRA_STD) $(CFLAGS) $(TUNDRA_INC) $(TUNDRA_WL_CFLAGS) $(TEST_DEFS) \
-		-o $@ $(SRCS) $(TUNDRA_WL_LIBS)
+		-o $@ $(SRCS) $(TUNDRA_LIBS) $(TUNDRA_WL_LIBS) $(TEST_RPATH)
+
+WAYLAND_SCANNER ?= wayland-scanner
+TEST_PROTO = $(TEST_BUILD)/protocols
+XDG_SHELL_XML = $(shell $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols)/stable/xdg-shell/xdg-shell.xml
+TOOL_CFLAGS = $(shell $(PKG_CONFIG) --cflags wayland-client)
+TOOL_LIBS = $(shell $(PKG_CONFIG) --libs wayland-client)
+
+$(TEST_PROTO)/xdg-shell-client-protocol.h:
+	@mkdir -p $(dir $@)
+	$(WAYLAND_SCANNER) client-header $(XDG_SHELL_XML) $@
+
+$(TEST_PROTO)/xdg-shell-protocol.c:
+	@mkdir -p $(dir $@)
+	$(WAYLAND_SCANNER) private-code $(XDG_SHELL_XML) $@
+
+$(TEST_BUILD)/tools/client: tests/tools/client.c \
+		$(TEST_PROTO)/xdg-shell-client-protocol.h $(TEST_PROTO)/xdg-shell-protocol.c
+	@mkdir -p $(dir $@)
+	$(CC) $(TUNDRA_STD) $(CFLAGS) -I$(TEST_PROTO) $(TOOL_CFLAGS) -o $@ $< \
+		$(TEST_PROTO)/xdg-shell-protocol.c $(TOOL_LIBS)
 
 $(TEST_BUILD)/tools/%: tests/tools/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(TUNDRA_STD) $(CFLAGS) -D_GNU_SOURCE \
-		$(shell $(PKG_CONFIG) --cflags wayland-client) -o $@ $< \
-		$(shell $(PKG_CONFIG) --libs wayland-client)
+	$(CC) $(TUNDRA_STD) $(CFLAGS) -D_GNU_SOURCE -o $@ $<
 
 UNIT_FLAGS = -g -fsanitize=address,undefined -fno-omit-frame-pointer
 UNIT_TESTS = $(patsubst tests/unit/%.c,$(TEST_BUILD)/unit/%,$(wildcard tests/unit/*.c))
@@ -59,7 +86,7 @@ UNIT_TESTS = $(patsubst tests/unit/%.c,$(TEST_BUILD)/unit/%,$(wildcard tests/uni
 $(TEST_BUILD)/unit/%: tests/unit/%.c tests/unit/test.h $(SRCS) $(HDRS)
 	@mkdir -p $(dir $@)
 	$(CC) $(TUNDRA_STD) $(CFLAGS) $(UNIT_FLAGS) $(TUNDRA_INC) -Itests/unit \
-		$(TEST_DEFS) -o $@ $<
+		$(TEST_DEFS) -o $@ $< $(TUNDRA_LIBS) $(TEST_RPATH)
 
 check-unit: $(UNIT_TESTS)
 	@rc=0; for t in $(UNIT_TESTS); do echo "# $$t"; $$t || rc=1; done; exit $$rc

@@ -16,6 +16,19 @@ tundra-borealis --version
 
 Started from a text console, it takes the screen until SIGTERM or SIGINT.
 
+## Configuration
+
+`$XDG_CONFIG_HOME/tundra/borealis/windows` (or `~/.config/tundra/borealis/windows`)
+says which programs prefer a vertical place, in the format of ADR-033. A program
+not listed is horizontal:
+
+```
+v = org.example.tall
+h = frost
+```
+
+A wrong file is reported and ignored.
+
 ## Tests
 
 ```
