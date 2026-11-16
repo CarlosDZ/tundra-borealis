@@ -108,6 +108,38 @@ int main(void) {
 
 	desk_init(&d, 1920, 1048);
 	desk_open(&d, 1, 'H');
+	desk_open(&d, 2, 'H');
+	desk_open(&d, 3, 'V');
+	CHECK(desk_fullscreen(&d, 2, 1) == 0 && d.fullscreen[0] == 2 &&
+	          desk_focused(&d) == 2,
+	      "a window goes fullscreen and takes the focus of its canvas");
+	CHECK(desk_fullscreen(&d, 2, 1) == -1, "asking again changes nothing");
+	CHECK(desk_focus_next(&d) == -1 && desk_move(&d) == -1 &&
+	          desk_rotate(&d) == -1,
+	      "Super + Tab, moving and rotating do nothing in fullscreen");
+	CHECK(desk_focus_window(&d, 1) == -1 && desk_focused(&d) == 2,
+	      "the pointer cannot focus a window hidden behind it");
+	CHECK(desk_fullscreen(&d, 1, 1) == 0 && d.fullscreen[0] == 1,
+	      "another window going fullscreen replaces it");
+	CHECK(desk_fullscreen(&d, 2, 0) == -1, "a window not in fullscreen leaves "
+	                                       "nothing");
+	CHECK(desk_fullscreen(&d, 1, 0) == 0 && d.fullscreen[0] == 0,
+	      "leaving fullscreen");
+	desk_fullscreen(&d, 1, 1);
+	desk_open(&d, 4, 'H');
+	CHECK(d.fullscreen[0] == 0 && desk_focused(&d) == 4,
+	      "a new window on the canvas ends the fullscreen");
+	desk_fullscreen(&d, 4, 1);
+	desk_close(&d, 4);
+	CHECK(d.fullscreen[0] == 0, "closing the fullscreen window ends it");
+	desk_fullscreen(&d, 3, 1);
+	CHECK(desk_send(&d, at(2, 1)) == 0 && d.fullscreen[0] == 0 &&
+	          d.fullscreen[desk_index(at(2, 1))] == 0,
+	      "sending it to another canvas ends it on both");
+	CHECK(desk_fullscreen(&d, 9, 1) == -1, "an unknown id");
+
+	desk_init(&d, 1920, 1048);
+	desk_open(&d, 1, 'H');
 	desk_resize(&d, 1366, 736);
 	struct slots_place p[LAYOUT_MAX];
 	struct layout l;

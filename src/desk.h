@@ -10,6 +10,7 @@ struct desk {
 	struct grid grid;
 	struct slots canvas[DESK_CANVASES];
 	unsigned int focus[DESK_CANVASES];
+	unsigned int fullscreen[DESK_CANVASES];
 	int w, h;
 };
 
@@ -26,6 +27,8 @@ int desk_open(struct desk *d, unsigned int id, char type);
 int desk_close(struct desk *d, unsigned int id);
 
 int desk_focus_window(struct desk *d, unsigned int id);
+
+int desk_fullscreen(struct desk *d, unsigned int id, int on);
 
 int desk_focus_next(struct desk *d);
 int desk_move(struct desk *d);

@@ -240,5 +240,17 @@ int main(void) {
 	CHECK(layout_compute(4, 2, 9, W1, H1, &l) == 0,
 	      "the block is ignored without one");
 
+	struct layout_rect dr = layout_dialog(800, 600, 200, 100, 2);
+	CHECK(dr.x == 298 && dr.y == 248 && dr.w == 204 && dr.h == 104,
+	      "a dialog is centred over its parent, border included");
+	dr = layout_dialog(800, 600, 2000, 2000, 2);
+	CHECK(dr.x == 0 && dr.y == 0 && dr.w == 800 && dr.h == 600,
+	      "a dialog bigger than its parent stays inside it");
+	dr = layout_dialog(800, 600, 0, 0, 2);
+	CHECK(dr.w == 800 && dr.h == 600, "a dialog with no size takes the room");
+	dr = layout_dialog(3, 3, 50, 50, 2);
+	CHECK(dr.x == 0 && dr.y == 0 && dr.w == 5 && dr.h == 5,
+	      "a parent too small still gives a dialog of one pixel");
+
 	return test_summary();
 }

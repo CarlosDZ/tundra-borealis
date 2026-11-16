@@ -30,6 +30,7 @@ struct server {
 
 	struct wl_list outputs;
 	struct wl_list windows;
+	struct wl_list popups;
 	struct wl_listener new_output;
 	struct wl_listener new_toplevel;
 	struct wl_listener new_popup;
@@ -51,6 +52,7 @@ struct server {
 	int pointer_locked;
 	uint32_t swipe_fingers;
 	double swipe_dx, swipe_dy;
+	int out_w, out_h;
 	int stopping;
 };
 

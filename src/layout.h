@@ -36,4 +36,6 @@ int layout_has_block(int nh, int nv);
 
 int layout_compute(int nh, int nv, int block, int w, int h, struct layout *out);
 
+struct layout_rect layout_dialog(int pw, int ph, int dw, int dh, int b);
+
 #endif

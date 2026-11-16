@@ -1,18 +1,18 @@
 #ifdef TUNDRA_BOREALIS_TEST
+#include <fcntl.h>
+#include <linux/input-event-codes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include <unistd.h>
-
-#include <fcntl.h>
-#include <linux/input-event-codes.h>
 #include <time.h>
+#include <unistd.h>
 #include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/interfaces/wlr_pointer.h>
 #include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_scene.h>
 
 #include "input.h"
 #include "testsock.h"
@@ -41,19 +41,38 @@ static char type_of(struct server *s, unsigned int id) {
 	return '-';
 }
 
+static const char *app_of(struct window *w) {
+	const char *app = w ? w->toplevel->app_id : NULL;
+	return app && *app ? app : "-";
+}
+
 static void list_windows(struct server *s, FILE *f) {
 	struct window *w;
 	wl_list_for_each(w, &s->windows, link) {
-		if (!w->placed || !w->toplevel->base->surface->mapped)
+		struct window *root = xdg_root(w);
+		if (!root->placed || !w->toplevel->base->surface->mapped)
 			continue;
-		struct grid_pos p = desk_pos(desk_find(&s->desk, w->id));
+		struct grid_pos p = desk_pos(desk_find(&s->desk, root->id));
 		struct wlr_box g = w->toplevel->base->geometry;
 		int sw = g.width < w->box.width ? g.width : w->box.width;
 		int sh = g.height < w->box.height ? g.height : w->box.height;
-		const char *app = w->toplevel->app_id;
-		fprintf(f, "window %u %s %d%d %c %d %d %d %d %d %d\n", w->id,
-		        app && *app ? app : "-", p.h, p.d, type_of(s, w->id), w->box.x,
-		        w->box.y, w->box.width, w->box.height, sw, sh);
+		char type = w->parent ? 'D' : type_of(s, w->id);
+		fprintf(f, "window %u %s %d%d %c %d %d %d %d %d %d %d\n", w->id,
+		        app_of(w), p.h, p.d, type, w->box.x, w->box.y, w->box.width,
+		        w->box.height, sw, sh, w->fullscreen);
+	}
+}
+
+static void list_popups(struct server *s, FILE *f) {
+	struct popup *p;
+	wl_list_for_each(p, &s->popups, link) {
+		int x, y;
+		if (!p->xdg_popup->base->surface->mapped ||
+		    !wlr_scene_node_coords(&p->tree->node, &x, &y))
+			continue;
+		struct wlr_box g = p->xdg_popup->base->geometry;
+		fprintf(f, "popup %s %d %d %d %d\n", app_of(xdg_popup_owner(p)), x, y,
+		        g.width, g.height);
 	}
 }
 
@@ -64,11 +83,9 @@ static uint32_t now_msec(void) {
 }
 
 static void show_focus(struct server *s, FILE *f) {
-	struct window *w = s->active;
-	const char *app = w ? w->toplevel->app_id : NULL;
 	struct grid_pos p = s->desk.grid.focus;
-	fprintf(f, "focus %u %s %d%d\n", w ? w->id : 0, app && *app ? app : "-",
-	        p.h, p.d);
+	fprintf(f, "focus %u %s %d%d\n", s->active ? s->active->id : 0,
+	        app_of(s->active), p.h, p.d);
 }
 
 static void frame(void) {
@@ -146,6 +163,10 @@ static int run(struct server *s, const char *line, FILE *f) {
 	unsigned int fingers;
 	if (strcmp(line, "windows") == 0) {
 		list_windows(s, f);
+		return 0;
+	}
+	if (strcmp(line, "popups") == 0) {
+		list_popups(s, f);
 		return 0;
 	}
 	if (strcmp(line, "focus") == 0) {

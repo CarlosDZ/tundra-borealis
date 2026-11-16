@@ -59,8 +59,8 @@ struct window *input_window_at(struct server *s, double lx, double ly,
 static void pointer_update(struct server *s, uint32_t time, int follow) {
 	struct wlr_surface *surface;
 	double sx, sy;
-	struct window *w =
-	    input_window_at(s, s->cursor->x, s->cursor->y, &surface, &sx, &sy);
+	struct window *w = xdg_root(
+	    input_window_at(s, s->cursor->x, s->cursor->y, &surface, &sx, &sy));
 	if (follow && w && w->id != desk_focused(&s->desk) &&
 	    desk_focus_window(&s->desk, w->id) == 0) {
 		server_arrange_all(s);
@@ -80,6 +80,9 @@ void input_focus(struct server *s, int warp) {
 	struct window *w = id ? xdg_window(s, id) : NULL;
 	if (w && !w->toplevel->base->surface->mapped)
 		w = NULL;
+	struct window *root = w;
+	if (w)
+		w = xdg_keyboard_window(w);
 	if (s->active && s->active != w)
 		wlr_xdg_toplevel_set_activated(s->active->toplevel, false);
 	s->active = w;
@@ -99,7 +102,7 @@ void input_focus(struct server *s, int warp) {
 		                               NULL, 0, NULL);
 	if (warp) {
 		int ox, oy;
-		server_canvas_origin(s, desk_find(&s->desk, w->id), &ox, &oy);
+		server_canvas_origin(s, desk_find(&s->desk, root->id), &ox, &oy);
 		wlr_cursor_warp(s->cursor, NULL, ox + w->box.x + w->box.width / 2.0,
 		                oy + w->box.y + w->box.height / 2.0);
 	}
@@ -178,11 +181,15 @@ static void act(struct server *s, const struct keys_result *r) {
 	case KEYS_OTHER_SCREEN:
 		done = grid_other_screen(&d->grid);
 		break;
-	case KEYS_CLOSE: {
-		struct window *w = xdg_window(s, desk_focused(d));
-		if (w)
-			wlr_xdg_toplevel_send_close(w->toplevel);
+	case KEYS_CLOSE:
+		if (s->active)
+			wlr_xdg_toplevel_send_close(s->active->toplevel);
 		return;
+	case KEYS_FULLSCREEN: {
+		unsigned int id = desk_focused(d);
+		int c = desk_find(d, id);
+		done = c < 0 ? -1 : desk_fullscreen(d, id, d->fullscreen[c] != id);
+		break;
 	}
 	case KEYS_TERMINAL: {
 		const char *cmd = getenv("TUNDRA_BOREALIS_TERMINAL");

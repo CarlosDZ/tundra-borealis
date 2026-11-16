@@ -97,8 +97,8 @@ windows() {
 }
 
 settled() {
-	[ "$(windows | wc -l)" -eq "$1" ] || return 1
-	windows | while read -r _ _ app _ _ _ _ w h _ _; do
+	[ "$(windows | awk '$5 != "D"' | wc -l)" -eq "$1" ] || return 1
+	windows | awk '$5 != "D"' | while read -r _ _ app _ _ _ _ w h _; do
 		last=$(grep '^configure ' "$WORK/client.$app" | tail -n 1)
 		[ "$last" = "configure $w $h" ] || exit 1
 	done
@@ -115,6 +115,41 @@ wait_settled() {
 
 field() {
 	windows | awk -v a="$1" -v f="$2" '$3 == a { print $f }'
+}
+
+wait_configure() {
+	i=0
+	until [ "$(grep "^$2configure " "$WORK/client.$1" | tail -n 1)" = "$2configure $3 $4" ]; do
+		i=$((i + 1))
+		[ "$i" -gt 50 ] && return 1
+		sleep 0.1
+	done
+}
+
+wait_window() {
+	i=0
+	until windows | awk -v a="$1" '$3 == a { f = 1 } END { exit !f }'; do
+		i=$((i + 1))
+		[ "$i" -gt 50 ] && return 1
+		sleep 0.1
+	done
+}
+
+box() {
+	windows | awk -v a="$1" '$3 == a { print $6, $7, $8, $9 }'
+}
+
+centred_on() {
+	set -- $(box "$1") $(box "$2")
+	dx=$(($1 * 2 + $3 - $5 * 2 - $7))
+	dy=$(($2 * 2 + $4 - $6 * 2 - $8))
+	[ "$dx" -ge -4 ] && [ "$dx" -le 4 ] && [ "$dy" -ge -4 ] && [ "$dy" -le 4 ]
+}
+
+inside() {
+	set -- $(box "$1") $(box "$2")
+	[ "$1" -ge "$5" ] && [ "$2" -ge "$6" ] &&
+		[ $(($1 + $3)) -le $(($5 + $7)) ] && [ $(($2 + $4)) -le $(($6 + $8)) ]
 }
 
 apart() {
