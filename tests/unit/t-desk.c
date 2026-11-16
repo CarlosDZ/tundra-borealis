@@ -180,6 +180,33 @@ int main(void) {
 	      "a pinned window that closes leaves its program free");
 	CHECK(desk_pin(&d, 1, 1, 10) == 0, "for the next window of that program");
 
+	desk_init(&d, 1000, 500);
+	desk_set_fixed(&d, desk_index(at(2, 1)), &fc);
+	grid_set_screens(&d.grid, GRID_EXTENDED);
+	desk_goto(&d, at(2, 1));
+	CHECK(desk_open(&d, 30, 'H') == 0 && grid_same(d.grid.focus, at(1, 1)),
+	      "extended, a window for a fixed canvas goes to the other screen");
+	desk_set_fixed(&d, desk_index(at(1, 1)), &fc);
+	desk_close(&d, 30);
+	desk_goto(&d, at(2, 1));
+	CHECK(desk_open(&d, 31, 'H') == -1, "unless that canvas is fixed too");
+
+	desk_init(&d, 1000, 500);
+	desk_resize_second(&d, 800, 400);
+	int cw, ch;
+	desk_canvas_size(&d, desk_index(at(1, 1)), &cw, &ch);
+	CHECK(cw == 1000 && ch == 500, "one screen: every canvas is the main one");
+	grid_set_screens(&d.grid, GRID_EXTENDED);
+	desk_canvas_size(&d, desk_index(at(1, 1)), &cw, &ch);
+	CHECK(cw == 800 && ch == 400, "extended: an odd canvas is the second");
+	desk_canvas_size(&d, desk_index(at(4, 3)), &cw, &ch);
+	CHECK(cw == 1000 && ch == 500, "and an even one the main");
+	desk_open(&d, 40, 'H');
+	struct slots_place sp[LAYOUT_MAX];
+	struct layout sl;
+	CHECK(desk_place(&d, 0, sp, &sl) == 1 && sp[0].r.w == 800,
+	      "places follow the size of their screen");
+
 	desk_init(&d, 1920, 1048);
 	desk_open(&d, 1, 'H');
 	desk_resize(&d, 1366, 736);

@@ -15,5 +15,10 @@ int main(void) {
 	      "an unknown argument is a usage error");
 	CHECK(parse(3, "--version", "x") == CLI_USAGE,
 	      "--version takes nothing after it");
+	CHECK(parse(2, "screens", NULL) == CLI_SCREENS, "screens alone");
+	CHECK(parse(3, "screens", "mirror") == CLI_SCREENS, "screens with a mode");
+	char *four[] = {"tundra-borealis", "screens", "mirror", "x", NULL};
+	CHECK(cli_parse(4, four) == CLI_USAGE, "screens takes one word at most");
+
 	return test_summary();
 }

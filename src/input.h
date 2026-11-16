@@ -5,6 +5,8 @@
 
 #include "server.h"
 
+struct wlr_surface;
+
 int input_init(struct server *s);
 void input_finish(struct server *s);
 

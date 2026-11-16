@@ -14,7 +14,7 @@ struct desk {
 	unsigned int fullscreen[DESK_CANVASES]; /* 0: none */
 	const struct fixed_canvas *fixed[DESK_CANVASES]; /* NULL: a working one */
 	unsigned int pinned[DESK_CANVASES][FIXED_MAX];   /* 0: no window */
-	int w, h;
+	int w, h, w2, h2; /* canvas sizes of the main screen and the second */
 };
 
 int desk_index(struct grid_pos p);
@@ -22,6 +22,9 @@ struct grid_pos desk_pos(int index);
 
 void desk_init(struct desk *d, int w, int h);
 void desk_resize(struct desk *d, int w, int h);
+void desk_resize_second(struct desk *d, int w, int h);
+/* A canvas has the size of the screen that shows it. */
+void desk_canvas_size(const struct desk *d, int index, int *w, int *h);
 
 int desk_find(const struct desk *d, unsigned int id);
 /* A fixed canvas takes no window but those of its programs, pinned to their
@@ -33,7 +36,8 @@ int desk_pin(struct desk *d, int index, int prog, unsigned int id);
 /* The focused window of the focused canvas, or 0. */
 unsigned int desk_focused(const struct desk *d);
 
-/* Opens id on the focused canvas and focuses it. Its canvas, or -1. */
+/* Opens id on the focused canvas and focuses it; on a fixed one, extended,
+ * on the canvas of the other screen if that is not fixed. Its canvas, or -1. */
 int desk_open(struct desk *d, unsigned int id, char type);
 /* Removes id; the next window clockwise takes its focus. Its canvas, or -1. */
 int desk_close(struct desk *d, unsigned int id);

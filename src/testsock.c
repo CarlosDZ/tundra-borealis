@@ -9,12 +9,16 @@
 #include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
+#include <wlr/backend/headless.h>
+#include <wlr/backend/multi.h>
 #include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/interfaces/wlr_pointer.h>
 #include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_scene.h>
 
 #include "input.h"
+#include "outputs.h"
 #include "testsock.h"
 #include "xdg.h"
 
@@ -59,10 +63,47 @@ static void list_windows(struct server *s, FILE *f) {
 		int sw = g.width < w->box.width ? g.width : w->box.width;
 		int sh = g.height < w->box.height ? g.height : w->box.height;
 		char type = w->parent ? 'D' : type_of(s, w->id);
+		struct wlr_box o;
+		outputs_canvas_box(s, desk_find(&s->desk, root->id), &o);
 		fprintf(f, "window %u %s %d%d %c %d %d %d %d %d %d %d\n", w->id,
-		        app_of(w), p.h, p.d, type, w->box.x, w->box.y, w->box.width,
-		        w->box.height, sw, sh, w->fullscreen);
+		        app_of(w), p.h, p.d, type, o.x + w->box.x, o.y + w->box.y,
+		        w->box.width, w->box.height, sw, sh, w->fullscreen);
 	}
+}
+
+static void show_output(struct server *s, FILE *f, const char *role,
+                        struct wlr_output *o) {
+	struct wlr_box b = {0};
+	if (o)
+		wlr_output_layout_get_box(s->output_layout, o, &b);
+	fprintf(f, " %s %d %d %d %d", role, b.x, b.y, b.width, b.height);
+}
+
+static void show_screens(struct server *s, FILE *f) {
+	static const char *modes[] = {"one", "mirror", "extended"};
+	fprintf(f, "screens %s", modes[s->desk.grid.screens]);
+	show_output(s, f, "main", outputs_main(s));
+	show_output(s, f, "second", outputs_second(s));
+	fprintf(f, "\n");
+}
+
+static void find_headless(struct wlr_backend *b, void *data) {
+	if (wlr_backend_is_headless(b))
+		*(struct wlr_backend **)data = b;
+}
+
+static int plug(struct server *s) {
+	struct wlr_backend *headless = NULL;
+	wlr_multi_for_each_backend(s->backend, find_headless, &headless);
+	return headless && wlr_headless_add_output(headless, 1280, 720) ? 0 : -1;
+}
+
+static int unplug(struct server *s) {
+	struct wlr_output *o = outputs_second(s);
+	if (!o)
+		return -1;
+	wlr_output_destroy(o);
+	return 0;
 }
 
 static void list_fixed(struct server *s, FILE *f) {
@@ -184,6 +225,14 @@ static int run(struct server *s, const char *line, FILE *f) {
 		list_windows(s, f);
 		return 0;
 	}
+	if (strcmp(line, "screens") == 0) {
+		show_screens(s, f);
+		return 0;
+	}
+	if (strcmp(line, "plug") == 0)
+		return plug(s);
+	if (strcmp(line, "unplug") == 0)
+		return unplug(s);
 	if (strcmp(line, "fixed") == 0) {
 		list_fixed(s, f);
 		return 0;

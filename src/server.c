@@ -20,36 +20,25 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/util/log.h>
 
+#include "control.h"
 #include "input.h"
+#include "outputs.h"
 #include "server.h"
 #include "testsock.h"
 #include "xdg.h"
 
 #define COMPOSITOR_VERSION 6
-#define PREFS_FILE_MAX 65536
+#define USER_FILE_MAX 65536
 
-static const float background_color[4] = {0.09f, 0.10f, 0.12f, 1.0f};
 static const float cover_color[4] = {0.35f, 0.12f, 0.12f, 1.0f};
-
-struct output {
-	struct wl_list link;
-	struct server *server;
-	struct wlr_output *wlr_output;
-	struct wl_listener frame, request_state, destroy;
-};
-
-static struct output *main_output(struct server *s) {
-	if (wl_list_empty(&s->outputs))
-		return NULL;
-	struct output *o = wl_container_of(s->outputs.next, o, link);
-	return o;
-}
 
 static void arrange_fixed(struct server *s, int index) {
 	const struct fixed_canvas *fc = s->desk.fixed[index];
 	for (int i = 0; i < fc->n; i++) {
 		struct fixed_run *r = &s->runs[index][i];
-		struct layout_rect lr = fixed_rect(&fc->p[i], s->desk.w, s->desk.h);
+		int cw, ch;
+		desk_canvas_size(&s->desk, index, &cw, &ch);
+		struct layout_rect lr = fixed_rect(&fc->p[i], cw, ch);
 		struct wlr_box b = {lr.x, lr.y, lr.w, lr.h};
 		unsigned int id = s->desk.pinned[index][i];
 		struct window *w = id ? xdg_window(s, id) : NULL;
@@ -91,21 +80,26 @@ void server_arrange(struct server *s, int index) {
 			xdg_place(w, index, r, p[i].id == s->desk.focus[index]);
 		}
 	}
+	struct wlr_box box;
+	outputs_canvas_box(s, index, &box);
 	struct window *full = s->desk.fullscreen[index]
 	                          ? xdg_window(s, s->desk.fullscreen[index])
 	                          : NULL;
 	if (full)
-		xdg_fullscreen(full, index, s->out_w, s->out_h);
-	for (int c = 0; c < DESK_CANVASES; c++)
+		xdg_fullscreen(full, index, box.width, box.height);
+	for (int c = 0; c < DESK_CANVASES; c++) {
+		outputs_canvas_box(s, c, &box);
+		wlr_scene_node_set_position(&s->canvas[c]->node, box.x, box.y);
 		wlr_scene_node_set_enabled(&s->canvas[c]->node,
 		                           grid_is_shown(&s->desk.grid, desk_pos(c)));
+	}
 }
 
 void server_canvas_origin(struct server *s, int index, int *x, int *y) {
-	(void)s;
-	(void)index;
-	*x = 0;
-	*y = 0;
+	struct wlr_box box;
+	outputs_canvas_box(s, index, &box);
+	*x = box.x;
+	*y = box.y;
 }
 
 void server_arrange_all(struct server *s) {
@@ -113,131 +107,51 @@ void server_arrange_all(struct server *s) {
 		server_arrange(s, c);
 }
 
-static void update_size(struct server *s) {
-	struct output *o = main_output(s);
-	int w = 0, h = 0;
-	if (o)
-		wlr_output_effective_resolution(o->wlr_output, &w, &h);
-	s->out_w = w;
-	s->out_h = h;
-	wlr_scene_rect_set_size(s->background, w, h);
-	desk_resize(&s->desk, w - XDG_GAP, h - XDG_GAP);
-	server_arrange_all(s);
-}
-
-static void output_frame(struct wl_listener *listener, void *data) {
-	(void)data;
-	struct output *o = wl_container_of(listener, o, frame);
-	struct wlr_scene_output *so =
-	    wlr_scene_get_scene_output(o->server->scene, o->wlr_output);
-	if (!so)
-		return;
-	wlr_scene_output_commit(so, NULL);
-	struct timespec now;
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	wlr_scene_output_send_frame_done(so, &now);
-}
-
-static void output_request_state(struct wl_listener *listener, void *data) {
-	struct output *o = wl_container_of(listener, o, request_state);
-	const struct wlr_output_event_request_state *event = data;
-	wlr_output_commit_state(o->wlr_output, event->state);
-	update_size(o->server);
-}
-
-static void output_destroy(struct wl_listener *listener, void *data) {
-	(void)data;
-	struct output *o = wl_container_of(listener, o, destroy);
-	struct server *s = o->server;
-	wl_list_remove(&o->frame.link);
-	wl_list_remove(&o->request_state.link);
-	wl_list_remove(&o->destroy.link);
-	wl_list_remove(&o->link);
-	free(o);
-	if (!s->stopping)
-		update_size(s);
-}
-
-static void new_output(struct wl_listener *listener, void *data) {
-	struct server *s = wl_container_of(listener, s, new_output);
-	struct wlr_output *wlr_output = data;
-
-	if (!wlr_output_init_render(wlr_output, s->allocator, s->renderer)) {
-		fprintf(stderr, "%s: cannot render to it\n", wlr_output->name);
-		return;
-	}
-	struct wlr_output_state state;
-	wlr_output_state_init(&state);
-	wlr_output_state_set_enabled(&state, true);
-	struct wlr_output_mode *mode = wlr_output_preferred_mode(wlr_output);
-	if (mode)
-		wlr_output_state_set_mode(&state, mode);
-	int ok = wlr_output_commit_state(wlr_output, &state);
-	wlr_output_state_finish(&state);
-	if (!ok) {
-		fprintf(stderr, "%s: cannot enable it\n", wlr_output->name);
-		return;
-	}
-
-	struct output *o = calloc(1, sizeof(*o));
-	if (!o) {
-		perror("calloc error");
-		return;
-	}
-	o->server = s;
-	o->wlr_output = wlr_output;
-	o->frame.notify = output_frame;
-	wl_signal_add(&wlr_output->events.frame, &o->frame);
-	o->request_state.notify = output_request_state;
-	wl_signal_add(&wlr_output->events.request_state, &o->request_state);
-	o->destroy.notify = output_destroy;
-	wl_signal_add(&wlr_output->events.destroy, &o->destroy);
-	wl_list_insert(s->outputs.prev, &o->link);
-
-	struct wlr_output_layout_output *lo =
-	    wlr_output_layout_add_auto(s->output_layout, wlr_output);
-	struct wlr_scene_output *so = wlr_scene_output_create(s->scene, wlr_output);
-	if (lo && so)
-		wlr_scene_output_layout_add_output(s->scene_layout, lo, so);
-	update_size(s);
-}
-
-static void load_prefs(struct server *s) {
+/* A file of $XDG_CONFIG_HOME/tundra/borealis, or of ~/.config. Its length,
+ * or -1 when there is none or it cannot be read, which is reported. */
+static long user_file(const char *name, char *text, size_t max) {
 	char path[4096];
 	const char *base = getenv("XDG_CONFIG_HOME");
 	const char *home = getenv("HOME");
 	int n;
 	if (base && *base)
-		n = snprintf(path, sizeof(path), "%s/tundra/borealis/windows", base);
+		n = snprintf(path, sizeof(path), "%s/tundra/borealis/%s", base, name);
 	else if (home && *home)
-		n = snprintf(path, sizeof(path), "%s/.config/tundra/borealis/windows",
-		             home);
+		n = snprintf(path, sizeof(path), "%s/.config/tundra/borealis/%s", home,
+		             name);
 	else
-		return;
+		return -1;
 	if (n < 0 || (size_t)n >= sizeof(path))
-		return;
-
+		return -1;
 	int fd = open(path, O_RDONLY | O_CLOEXEC);
 	if (fd < 0) {
 		if (errno != ENOENT)
 			fprintf(stderr, "%s: %s\n", path, strerror(errno));
-		return;
+		return -1;
 	}
-	static char text[PREFS_FILE_MAX + 1];
 	size_t len = 0;
 	ssize_t r;
-	while (len <= PREFS_FILE_MAX &&
-	       (r = read(fd, text + len, PREFS_FILE_MAX + 1 - len)) > 0)
+	while (len <= max && (r = read(fd, text + len, max + 1 - len)) > 0)
 		len += (size_t)r;
 	close(fd);
-	if (len > PREFS_FILE_MAX) {
-		fprintf(stderr, "%s: bigger than %d bytes, ignored\n", path,
-		        PREFS_FILE_MAX);
-		return;
+	if (len > max) {
+		fprintf(stderr, "%s: bigger than %zu bytes, ignored\n", path, max);
+		return -1;
 	}
-	char err[PREFS_ERR_MAX];
-	if (prefs_parse(text, len, &s->prefs, err) < 0)
-		fprintf(stderr, "%s: %s, ignored\n", path, err);
+	return (long)len;
+}
+
+static void load_config(struct server *s) {
+	static char text[USER_FILE_MAX + 1];
+	char err[PREFS_ERR_MAX > SCREENS_ERR_MAX ? PREFS_ERR_MAX : SCREENS_ERR_MAX];
+	long n = user_file("windows", text, USER_FILE_MAX);
+	if (n >= 0 && prefs_parse(text, (size_t)n, &s->prefs, err) < 0)
+		fprintf(stderr, "windows: %s, ignored\n", err);
+	screens_default(&s->screens);
+	n = user_file("screens", text, USER_FILE_MAX);
+	if (n >= 0 && screens_parse(text, (size_t)n, &s->screens, err) < 0)
+		fprintf(stderr, "screens: %s, ignored\n", err);
+	s->mirror = s->screens.mirror;
 }
 
 static int on_signal(int sig, void *data) {
@@ -260,7 +174,7 @@ int server_run(void) {
 	wl_list_init(&s.new_decoration.link);
 	wl_list_init(&s.keyboards);
 	desk_init(&s.desk, 0, 0);
-	load_prefs(&s);
+	load_config(&s);
 	clients_load(&s);
 
 	s.display = wl_display_create();
@@ -303,12 +217,11 @@ int server_run(void) {
 		goto out;
 	}
 	s.scene_layout = wlr_scene_attach_output_layout(s.scene, s.output_layout);
-	s.background =
-	    wlr_scene_rect_create(&s.scene->tree, 0, 0, background_color);
+	s.backgrounds = wlr_scene_tree_create(&s.scene->tree);
 	for (int c = 0; c < DESK_CANVASES; c++)
 		s.canvas[c] = wlr_scene_tree_create(&s.scene->tree);
 	s.limbo = wlr_scene_tree_create(&s.scene->tree);
-	if (!s.scene_layout || !s.background || !s.canvas[DESK_CANVASES - 1] ||
+	if (!s.scene_layout || !s.backgrounds || !s.canvas[DESK_CANVASES - 1] ||
 	    !s.limbo) {
 		fprintf(stderr, "cannot create the scene\n");
 		goto out;
@@ -334,8 +247,7 @@ int server_run(void) {
 		fprintf(stderr, "cannot create the privileged globals\n");
 		goto out;
 	}
-	s.new_output.notify = new_output;
-	wl_signal_add(&s.backend->events.new_output, &s.new_output);
+	outputs_init(&s);
 
 	const char *socket = wl_display_add_socket_auto(s.display);
 	if (!socket) {
@@ -347,6 +259,8 @@ int server_run(void) {
 		goto out;
 	}
 	setenv("WAYLAND_DISPLAY", socket, 1);
+	if (control_init(&s, socket) < 0)
+		goto out;
 	clients_start(&s);
 
 	sigterm = wl_event_loop_add_signal(loop, SIGTERM, on_signal, s.display);
@@ -364,6 +278,7 @@ int server_run(void) {
 
 out:
 	s.stopping = 1;
+	control_finish();
 	clients_finish(&s);
 	testsock_finish();
 	if (sigterm)
@@ -372,7 +287,7 @@ out:
 		wl_event_source_remove(sigint);
 	wl_display_destroy_clients(s.display);
 	/* wlroots asserts that no listener is left */
-	wl_list_remove(&s.new_output.link);
+	outputs_finish(&s);
 	wl_list_remove(&s.new_toplevel.link);
 	wl_list_remove(&s.new_popup.link);
 	wl_list_remove(&s.new_decoration.link);
