@@ -87,5 +87,18 @@ int main(void) {
 	grid_set_screens(&g, GRID_ONE);
 	CHECK(!grid_is_shown(&g, at(3, 2)), "one screen: only the focus is shown");
 
+	enum grid_dir dir = GRID_LEFT;
+	CHECK(grid_swipe(0, -200, &dir) == 0 && dir == GRID_DEEPER,
+	      "fingers up go to the next depth");
+	CHECK(grid_swipe(0, 200, &dir) == 0 && dir == GRID_SHALLOWER,
+	      "fingers down come back a depth");
+	CHECK(grid_swipe(150, 20, &dir) == 0 && dir == GRID_RIGHT,
+	      "fingers right go right");
+	CHECK(grid_swipe(-150, -90, &dir) == 0 && dir == GRID_LEFT,
+	      "the longer axis decides");
+	dir = GRID_RIGHT;
+	CHECK(grid_swipe(20, -30, &dir) == -1 && dir == GRID_RIGHT,
+	      "a short swipe does nothing");
+
 	return test_summary();
 }

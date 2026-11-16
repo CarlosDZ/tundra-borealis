@@ -19,6 +19,7 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/util/log.h>
 
+#include "input.h"
 #include "server.h"
 #include "testsock.h"
 #include "xdg.h"
@@ -56,6 +57,13 @@ void server_arrange(struct server *s, int index) {
 	for (int c = 0; c < DESK_CANVASES; c++)
 		wlr_scene_node_set_enabled(&s->canvas[c]->node,
 		                           grid_is_shown(&s->desk.grid, desk_pos(c)));
+}
+
+void server_canvas_origin(struct server *s, int index, int *x, int *y) {
+	(void)s;
+	(void)index;
+	*x = 0;
+	*y = 0;
 }
 
 void server_arrange_all(struct server *s) {
@@ -206,6 +214,7 @@ int server_run(void) {
 	wl_list_init(&s.new_toplevel.link);
 	wl_list_init(&s.new_popup.link);
 	wl_list_init(&s.new_decoration.link);
+	wl_list_init(&s.keyboards);
 	desk_init(&s.desk, 0, 0);
 	load_prefs(&s);
 
@@ -216,7 +225,7 @@ int server_run(void) {
 	}
 	struct wl_event_loop *loop = wl_display_get_event_loop(s.display);
 
-	s.backend = wlr_backend_autocreate(loop, NULL);
+	s.backend = wlr_backend_autocreate(loop, &s.session);
 	if (!s.backend) {
 		fprintf(stderr, "cannot create the backend\n");
 		goto out;
@@ -271,6 +280,10 @@ int server_run(void) {
 		fprintf(stderr, "cannot create the window globals\n");
 		goto out;
 	}
+	if (input_init(&s) < 0) {
+		fprintf(stderr, "cannot create the cursor\n");
+		goto out;
+	}
 	s.new_output.notify = new_output;
 	wl_signal_add(&s.backend->events.new_output, &s.new_output);
 
@@ -310,6 +323,7 @@ out:
 	wl_list_remove(&s.new_toplevel.link);
 	wl_list_remove(&s.new_popup.link);
 	wl_list_remove(&s.new_decoration.link);
+	input_finish(&s);
 	if (s.scene)
 		wlr_scene_node_destroy(&s.scene->tree.node);
 	if (s.allocator)

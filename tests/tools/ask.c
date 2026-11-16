@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -19,6 +20,8 @@ int main(int argc, char **argv) {
 		perror("connect error");
 		return 1;
 	}
+	struct timeval tv = {10, 0};
+	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 	char line[512] = "";
 	for (int i = 1; i < argc; i++) {
 		if (i > 1)

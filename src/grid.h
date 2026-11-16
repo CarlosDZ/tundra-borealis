@@ -31,6 +31,9 @@ int grid_goto(struct grid *g, struct grid_pos p);
 
 int grid_other_screen(struct grid *g);
 
+#define GRID_SWIPE_MIN 40.0
+int grid_swipe(double dx, double dy, enum grid_dir *dir);
+
 struct grid_pos grid_shown(const struct grid *g, int screen);
 int grid_focused_screen(const struct grid *g);
 int grid_is_shown(const struct grid *g, struct grid_pos p);

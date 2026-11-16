@@ -25,6 +25,8 @@ unsigned int desk_focused(const struct desk *d);
 int desk_open(struct desk *d, unsigned int id, char type);
 int desk_close(struct desk *d, unsigned int id);
 
+int desk_focus_window(struct desk *d, unsigned int id);
+
 int desk_focus_next(struct desk *d);
 int desk_move(struct desk *d);
 int desk_rotate(struct desk *d);

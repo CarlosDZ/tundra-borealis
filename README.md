@@ -15,6 +15,10 @@ tundra-borealis --version
 ```
 
 Started from a text console, it takes the screen until SIGTERM or SIGINT.
+Ctrl + Alt + F1 to F12 switch to another console.
+
+The keyboard layout comes from `XKB_DEFAULT_LAYOUT` and the like; Caps Lock is
+Esc. Super + T starts `frost`, or the command in `TUNDRA_BOREALIS_TERMINAL`.
 
 ## Configuration
 

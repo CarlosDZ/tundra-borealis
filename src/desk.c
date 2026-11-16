@@ -67,6 +67,16 @@ int desk_close(struct desk *d, unsigned int id) {
 	return c;
 }
 
+int desk_focus_window(struct desk *d, unsigned int id) {
+	int c = desk_find(d, id);
+	if (c < 0)
+		return -1;
+	d->focus[c] = id;
+	if (c != here(d))
+		grid_goto(&d->grid, desk_pos(c));
+	return 0;
+}
+
 int desk_focus_next(struct desk *d) {
 	int c = here(d);
 	unsigned int next = after(d, c, d->focus[c]);

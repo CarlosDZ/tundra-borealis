@@ -36,13 +36,23 @@ check() {
 	fi
 }
 
+refute() {
+	desc=$1
+	shift
+	if "$@" >/dev/null 2>&1; then
+		not_ok "$desc"
+	else
+		ok "$desc"
+	fi
+}
+
 prefs() {
 	mkdir -p "$XDG_CONFIG_HOME/tundra/borealis"
 	cat >"$XDG_CONFIG_HOME/tundra/borealis/windows"
 }
 
 start() {
-	"$BOREALIS" 2>"$WORK/borealis.log" &
+	"$BOREALIS" >"$WORK/borealis.out" 2>"$WORK/borealis.log" &
 	PID=$!
 	i=0
 	while [ ! -S "$WORK/$WAYLAND_DISPLAY" ] || [ ! -S "$WORK/borealis-test" ]; do
@@ -117,6 +127,50 @@ apart() {
 					    y[i] < y[j] + h[j] && y[j] < y[i] + h[i])
 						exit 1
 		}'
+}
+
+chord() {
+	for c in "$@"; do
+		ask key "$c" down >/dev/null
+	done
+	for c in $(printf '%s\n' "$@" | sed -n '1!G;h;$p'); do
+		ask key "$c" up >/dev/null
+	done
+}
+
+super_digits() {
+	ask key 125 down >/dev/null
+	for n in "$1" "$2"; do
+		ask key $((n + 1)) down >/dev/null
+		ask key $((n + 1)) up >/dev/null
+	done
+	ask key 125 up >/dev/null
+}
+
+focused() {
+	ask focus | awk '$1 == "focus" { print $3 }'
+}
+
+canvas() {
+	ask focus | awk '$1 == "focus" { print $4 }'
+}
+
+centre() {
+	windows | awk -v a="$1" '$3 == a { print int($6 + $8 / 2), int($7 + $9 / 2) }'
+}
+
+move_to() {
+	ask move $(centre "$1") >/dev/null
+}
+
+at_centre() {
+	set -- $(centre "$1") $(ask pointer | awk '$1 == "pointer" { print $2, $3 }')
+	[ $(($1 - $3)) -le 1 ] && [ $(($3 - $1)) -le 1 ] &&
+		[ $(($2 - $4)) -le 1 ] && [ $(($4 - $2)) -le 1 ]
+}
+
+pointer_at() {
+	[ "$(ask pointer | awk '$1 == "pointer" { print $2, $3 }')" = "$1 $2" ]
 }
 
 finish() {
