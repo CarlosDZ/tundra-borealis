@@ -24,6 +24,8 @@ struct server {
 	struct wlr_xdg_shell *xdg_shell;
 	struct wlr_xdg_decoration_manager_v1 *decorations;
 	struct wlr_seat *seat;
+	struct wlr_virtual_keyboard_manager_v1 *virtual_keyboards;
+	struct wlr_virtual_pointer_manager_v1 *virtual_pointers;
 	struct wlr_session *session;
 	struct wlr_cursor *cursor;
 	struct wlr_xcursor_manager *cursor_mgr;
@@ -38,6 +40,7 @@ struct server {
 	struct wl_listener new_decoration;
 	struct wl_list keyboards;
 	struct wl_listener new_input, request_set_cursor;
+	struct wl_listener new_virtual_keyboard, new_virtual_pointer;
 	struct wl_listener cursor_motion, cursor_motion_absolute, cursor_button,
 	    cursor_axis, cursor_frame;
 	struct wl_listener swipe_begin, swipe_update, swipe_end;

@@ -31,8 +31,17 @@ struct win {
 
 static struct win main_win = {.tag = ""}, dialog_win = {.tag = "dlg-"};
 static const char *app;
-static int want_full, want_dialog, want_menu, running = 1;
+static int want_full, want_dialog, want_menu, listing, running = 1;
 static struct wl_surface *menu_surface;
+
+static void say(const char *fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	vprintf(fmt, ap);
+	va_end(ap);
+	putchar('\n');
+	fflush(stdout);
+}
 
 static void on_global(void *data, struct wl_registry *registry, uint32_t name,
                       const char *interface, uint32_t version) {
@@ -41,6 +50,8 @@ static void on_global(void *data, struct wl_registry *registry, uint32_t name,
 	for (size_t i = 0; i < WANTED; i++)
 		if (strcmp(interface, wanted[i]) == 0)
 			seen[i] = 1;
+	if (listing)
+		say("global %s", interface);
 	if (strcmp(interface, "wl_compositor") == 0)
 		compositor =
 		    wl_registry_bind(registry, name, &wl_compositor_interface, 4);
@@ -63,15 +74,6 @@ static const struct wl_registry_listener registry_listener = {
     .global = on_global,
     .global_remove = on_global_remove,
 };
-
-static void say(const char *fmt, ...) {
-	va_list ap;
-	va_start(ap, fmt);
-	vprintf(fmt, ap);
-	va_end(ap);
-	putchar('\n');
-	fflush(stdout);
-}
 
 static void kb_keymap(void *d, struct wl_keyboard *k, uint32_t format, int fd,
                       uint32_t size) {
@@ -433,11 +435,12 @@ static int option(const char *o) {
 
 int main(int argc, char **argv) {
 	int window = argc >= 3 && strcmp(argv[1], "window") == 0;
-	int bad = argc != 1 && !window;
+	listing = argc == 2 && strcmp(argv[1], "list") == 0;
+	int bad = argc != 1 && !window && !listing;
 	for (int i = 3; window && i < argc; i++)
 		bad |= option(argv[i]) < 0;
 	if (bad) {
-		fprintf(stderr, "usage: client [window app_id [min=WxH] [full] "
+		fprintf(stderr, "usage: client [list | window app_id [min=WxH] [full] "
 		                "[dialog=WxH] [menu]]\n");
 		return 2;
 	}
@@ -458,6 +461,12 @@ int main(int argc, char **argv) {
 	if (window) {
 		inherited();
 		return open_window(display);
+	}
+	if (listing) {
+		say("listed");
+		while (wl_display_dispatch(display) != -1)
+			;
+		return 0;
 	}
 
 	int rc = 0;

@@ -15,6 +15,7 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_scene.h>
+#include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/util/log.h>
@@ -326,6 +327,11 @@ int server_run(void) {
 	}
 	if (input_init(&s) < 0) {
 		fprintf(stderr, "cannot create the cursor\n");
+		goto out;
+	}
+	clients_filter_globals(&s);
+	if (!wlr_screencopy_manager_v1_create(s.display)) {
+		fprintf(stderr, "cannot create the privileged globals\n");
 		goto out;
 	}
 	s.new_output.notify = new_output;

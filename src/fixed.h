@@ -44,6 +44,8 @@ int fixed_parse(const char *text, size_t len, struct fixed_canvas *c,
 
 struct layout_rect fixed_rect(const struct fixed_prog *p, int w, int h);
 
+unsigned int fixed_privilege_of(const char *interface);
+
 int fixed_died(struct fixed_deaths *d, uint64_t now);
 
 #endif

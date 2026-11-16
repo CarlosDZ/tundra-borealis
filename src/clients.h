@@ -24,4 +24,6 @@ void clients_finish(struct server *s);
 
 struct fixed_run *clients_run_of(struct server *s, struct wl_client *client);
 
+void clients_filter_globals(struct server *s);
+
 #endif
