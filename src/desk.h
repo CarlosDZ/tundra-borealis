@@ -1,6 +1,7 @@
 #ifndef TUNDRA_DESK_H
 #define TUNDRA_DESK_H
 
+#include "fixed.h"
 #include "grid.h"
 #include "slots.h"
 
@@ -11,6 +12,8 @@ struct desk {
 	struct slots canvas[DESK_CANVASES];
 	unsigned int focus[DESK_CANVASES];      /* 0: the canvas focuses nothing */
 	unsigned int fullscreen[DESK_CANVASES]; /* 0: none */
+	const struct fixed_canvas *fixed[DESK_CANVASES]; /* NULL: a working one */
+	unsigned int pinned[DESK_CANVASES][FIXED_MAX];   /* 0: no window */
 	int w, h;
 };
 
@@ -21,6 +24,12 @@ void desk_init(struct desk *d, int w, int h);
 void desk_resize(struct desk *d, int w, int h);
 
 int desk_find(const struct desk *d, unsigned int id);
+/* A fixed canvas takes no window but those of its programs, pinned to their
+ * place; none of them moves, rotates or goes to another canvas. */
+void desk_set_fixed(struct desk *d, int index, const struct fixed_canvas *c);
+/* 0, or -1 if index is not fixed, the program is taken or id is on the desk. */
+int desk_pin(struct desk *d, int index, int prog, unsigned int id);
+
 /* The focused window of the focused canvas, or 0. */
 unsigned int desk_focused(const struct desk *d);
 

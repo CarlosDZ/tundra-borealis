@@ -6,9 +6,12 @@ VERSION = $(shell grep '^version=' metapkg | cut -d= -f2)
 
 TUNDRA_PKGS = wlroots-0.20 wayland-server xkbcommon libinput pixman-1
 
+TUNDRA_BOREALIS_DIR ?= /etc/tundra/borealis
+
 TUNDRA_STD  = -std=c11
 TUNDRA_DEFS = -D_GNU_SOURCE -DWLR_USE_UNSTABLE \
-              -DTUNDRA_BOREALIS_VERSION=\"$(VERSION)\"
+              -DTUNDRA_BOREALIS_VERSION=\"$(VERSION)\" \
+              -DTUNDRA_BOREALIS_DIR=\"$(TUNDRA_BOREALIS_DIR)\"
 TUNDRA_INC  = -Isrc
 TUNDRA_LIBS = -ltundra-conf
 # Deferred: the unit tests build on machines without wlroots
@@ -57,7 +60,8 @@ TEST_BUILD = $(BUILD)/test
 TEST_BIN = $(TEST_BUILD)/tundra-borealis
 TEST_TOOLS = $(patsubst tests/tools/%.c,$(TEST_BUILD)/tools/%,$(wildcard tests/tools/*.c))
 TEST_DEFS = -D_GNU_SOURCE -DWLR_USE_UNSTABLE -DTUNDRA_BOREALIS_TEST \
-            -DTUNDRA_BOREALIS_VERSION=\"$(VERSION)-test\"
+            -DTUNDRA_BOREALIS_VERSION=\"$(VERSION)-test\" \
+            -DTUNDRA_BOREALIS_DIR=\"$(TUNDRA_BOREALIS_DIR)\"
 
 $(TEST_BIN): FORCE
 	@mkdir -p $(dir $@)

@@ -35,6 +35,8 @@ static char type_of(struct server *s, unsigned int id) {
 	int c = desk_find(&s->desk, id);
 	if (c < 0)
 		return '-';
+	if (s->desk.fixed[c])
+		return 'F';
 	for (int i = 0; i < s->desk.canvas[c].n; i++)
 		if (s->desk.canvas[c].w[i].id == id)
 			return s->desk.canvas[c].w[i].type;
@@ -60,6 +62,23 @@ static void list_windows(struct server *s, FILE *f) {
 		fprintf(f, "window %u %s %d%d %c %d %d %d %d %d %d %d\n", w->id,
 		        app_of(w), p.h, p.d, type, w->box.x, w->box.y, w->box.width,
 		        w->box.height, sw, sh, w->fullscreen);
+	}
+}
+
+static void list_fixed(struct server *s, FILE *f) {
+	for (int c = 0; c < DESK_CANVASES; c++) {
+		if (!s->desk.fixed[c])
+			continue;
+		struct grid_pos p = desk_pos(c);
+		for (int i = 0; i < s->desk.fixed[c]->n; i++) {
+			struct fixed_run *r = &s->runs[c][i];
+			fprintf(f, "fixed %d%d %s %s %u\n", p.h, p.d,
+			        s->desk.fixed[c]->p[i].name,
+			        r->covered  ? "covered"
+			        : r->client ? "running"
+			                    : "starting",
+			        s->desk.pinned[c][i]);
+		}
 	}
 }
 
@@ -163,6 +182,10 @@ static int run(struct server *s, const char *line, FILE *f) {
 	unsigned int fingers;
 	if (strcmp(line, "windows") == 0) {
 		list_windows(s, f);
+		return 0;
+	}
+	if (strcmp(line, "fixed") == 0) {
+		list_fixed(s, f);
 		return 0;
 	}
 	if (strcmp(line, "popups") == 0) {

@@ -1,9 +1,6 @@
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/wait.h>
 #include <time.h>
-#include <unistd.h>
 #include <wlr/backend.h>
 #include <wlr/backend/session.h>
 #include <wlr/types/wlr_cursor.h>
@@ -16,6 +13,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "input.h"
+#include "spawn.h"
 #include "xdg.h"
 
 #define REPEAT_RATE 25
@@ -109,31 +107,6 @@ void input_focus(struct server *s, int warp) {
 	pointer_update(s, now_msec(), 0);
 }
 
-static void spawn(const char *cmd) {
-	pid_t pid = fork();
-	if (pid < 0) {
-		perror("fork error");
-		return;
-	}
-	if (pid == 0) {
-		/* Blocked and ignored signals survive exec (ADR-026) */
-		sigset_t none;
-		sigemptyset(&none);
-		sigprocmask(SIG_SETMASK, &none, NULL);
-		for (int sig = 1; sig < NSIG; sig++)
-			signal(sig, SIG_DFL);
-		setsid();
-		pid_t g = fork();
-		if (g == 0) {
-			close_range(3, ~0U, 0);
-			execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
-			_exit(127);
-		}
-		_exit(g < 0 ? 1 : 0);
-	}
-	waitpid(pid, NULL, 0);
-}
-
 static void act(struct server *s, const struct keys_result *r) {
 	struct desk *d = &s->desk;
 	struct grid_pos to = {r->h, r->d};
@@ -183,7 +156,7 @@ static void act(struct server *s, const struct keys_result *r) {
 		done = grid_other_screen(&d->grid);
 		break;
 	case KEYS_CLOSE:
-		if (s->active)
+		if (s->active && !(s->active->run && !s->active->parent))
 			wlr_xdg_toplevel_send_close(s->active->toplevel);
 		return;
 	case KEYS_FULLSCREEN: {
@@ -194,7 +167,7 @@ static void act(struct server *s, const struct keys_result *r) {
 	}
 	case KEYS_TERMINAL: {
 		const char *cmd = getenv("TUNDRA_BOREALIS_TERMINAL");
-		spawn(cmd && *cmd ? cmd : DEFAULT_TERMINAL);
+		spawn(cmd && *cmd ? cmd : DEFAULT_TERMINAL, -1);
 		return;
 	}
 	case KEYS_POINTER_LOCK:

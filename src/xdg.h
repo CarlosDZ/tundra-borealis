@@ -19,6 +19,7 @@ struct window {
 	int placed;
 	int fullscreen;
 	struct window *parent;
+	struct fixed_run *run; /* the program of a fixed canvas it belongs to */
 	struct wlr_xdg_toplevel *toplevel;
 	struct wlr_xdg_toplevel_decoration_v1 *decoration;
 	struct wlr_scene_tree *tree;
