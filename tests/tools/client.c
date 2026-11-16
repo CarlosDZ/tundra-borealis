@@ -21,9 +21,18 @@ static struct wl_compositor *compositor;
 static struct wl_seat *seat;
 static struct wl_shm *shm;
 static struct xdg_wm_base *wm_base;
-static struct wl_surface *surface;
-static struct xdg_surface *xsurface;
-static int cfg_w, cfg_h, min_w, min_h, running = 1;
+struct win {
+	const char *tag;
+	struct wl_surface *surface;
+	struct xdg_surface *xsurface;
+	struct xdg_toplevel *top;
+	int cfg_w, cfg_h, min_w, min_h, want_w, want_h, drawn_w, drawn_h;
+};
+
+static struct win main_win = {.tag = ""}, dialog_win = {.tag = "dlg-"};
+static const char *app;
+static int want_full, want_dialog, want_menu, running = 1;
+static struct wl_surface *menu_surface;
 
 static void on_global(void *data, struct wl_registry *registry, uint32_t name,
                       const char *interface, uint32_t version) {
@@ -81,7 +90,7 @@ static void kb_enter(void *d, struct wl_keyboard *k, uint32_t serial,
 	(void)serial;
 	(void)s;
 	(void)keys;
-	say("kbd-enter");
+	say("kbd-enter%s", s == dialog_win.surface ? " dlg" : "");
 }
 
 static void kb_leave(void *d, struct wl_keyboard *k, uint32_t serial,
@@ -231,25 +240,101 @@ static struct wl_buffer *draw(int w, int h) {
 	return b;
 }
 
-static void on_surface_configure(void *data, struct xdg_surface *s,
-                                 uint32_t serial) {
-	(void)data;
-	xdg_surface_ack_configure(s, serial);
-	int w = cfg_w > 0 ? cfg_w : DEFAULT_W, h = cfg_h > 0 ? cfg_h : DEFAULT_H;
-	if (w < min_w)
-		w = min_w;
-	if (h < min_h)
-		h = min_h;
+static int draw_into(struct wl_surface *surface, int w, int h) {
 	struct wl_buffer *b = draw(w, h);
-	if (!b) {
-		running = 0;
-		return;
-	}
+	if (!b)
+		return -1;
 	wl_surface_attach(surface, b, 0, 0);
 	wl_surface_damage_buffer(surface, 0, 0, w, h);
 	wl_surface_commit(surface);
-	printf("configure %d %d\n", cfg_w, cfg_h);
-	fflush(stdout);
+	return 0;
+}
+
+static void on_menu_configure(void *data, struct xdg_surface *s,
+                              uint32_t serial) {
+	(void)data;
+	xdg_surface_ack_configure(s, serial);
+	if (draw_into(menu_surface, 150, 100) < 0)
+		running = 0;
+}
+
+static const struct xdg_surface_listener menu_surface_listener = {
+    .configure = on_menu_configure,
+};
+
+static void on_popup_configure(void *data, struct xdg_popup *p, int32_t x,
+                               int32_t y, int32_t w, int32_t h) {
+	(void)data;
+	(void)p;
+	say("popup %d %d %d %d", x, y, w, h);
+}
+
+static void on_popup_done(void *data, struct xdg_popup *p) {
+	(void)data;
+	(void)p;
+	say("popup-done");
+}
+
+static const struct xdg_popup_listener popup_listener = {
+    .configure = on_popup_configure,
+    .popup_done = on_popup_done,
+};
+
+static void open_menu(void) {
+	struct xdg_positioner *pos = xdg_wm_base_create_positioner(wm_base);
+	xdg_positioner_set_size(pos, 150, 100);
+	xdg_positioner_set_anchor_rect(pos, main_win.drawn_w - 1,
+	                               main_win.drawn_h - 1, 1, 1);
+	xdg_positioner_set_anchor(pos, XDG_POSITIONER_ANCHOR_BOTTOM_RIGHT);
+	xdg_positioner_set_gravity(pos, XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
+	xdg_positioner_set_constraint_adjustment(
+	    pos, XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_X |
+	             XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_SLIDE_Y |
+	             XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_X |
+	             XDG_POSITIONER_CONSTRAINT_ADJUSTMENT_FLIP_Y);
+	menu_surface = wl_compositor_create_surface(compositor);
+	struct xdg_surface *xs = xdg_wm_base_get_xdg_surface(wm_base, menu_surface);
+	xdg_surface_add_listener(xs, &menu_surface_listener, NULL);
+	struct xdg_popup *p = xdg_surface_get_popup(xs, main_win.xsurface, pos);
+	xdg_popup_add_listener(p, &popup_listener, NULL);
+	xdg_positioner_destroy(pos);
+	wl_surface_commit(menu_surface);
+}
+
+static void open_toplevel(struct win *w, const char *app_id,
+                          struct xdg_toplevel *parent);
+
+static void on_surface_configure(void *data, struct xdg_surface *s,
+                                 uint32_t serial) {
+	struct win *win = data;
+	xdg_surface_ack_configure(s, serial);
+	int w = win->cfg_w > 0    ? win->cfg_w
+	        : win->want_w > 0 ? win->want_w
+	                          : DEFAULT_W;
+	int h = win->cfg_h > 0    ? win->cfg_h
+	        : win->want_h > 0 ? win->want_h
+	                          : DEFAULT_H;
+	if (w < win->min_w)
+		w = win->min_w;
+	if (h < win->min_h)
+		h = win->min_h;
+	int first = win->drawn_w == 0;
+	if (draw_into(win->surface, w, h) < 0) {
+		running = 0;
+		return;
+	}
+	win->drawn_w = w;
+	win->drawn_h = h;
+	say("%sconfigure %d %d", win->tag, win->cfg_w, win->cfg_h);
+	if (win != &main_win || !first)
+		return;
+	if (want_dialog) {
+		char id[256];
+		snprintf(id, sizeof(id), "%s-dialog", app);
+		open_toplevel(&dialog_win, id, main_win.top);
+	}
+	if (want_menu)
+		open_menu();
 }
 
 static const struct xdg_surface_listener surface_listener = {
@@ -258,24 +343,48 @@ static const struct xdg_surface_listener surface_listener = {
 
 static void on_toplevel_configure(void *data, struct xdg_toplevel *t, int32_t w,
                                   int32_t h, struct wl_array *st) {
-	(void)data;
+	struct win *win = data;
 	(void)t;
 	(void)st;
-	cfg_w = w;
-	cfg_h = h;
+	win->cfg_w = w;
+	win->cfg_h = h;
 }
 
 static void on_toplevel_close(void *data, struct xdg_toplevel *t) {
-	(void)data;
-	(void)t;
-	say("close");
-	running = 0;
+	struct win *win = data;
+	if (win == &main_win) {
+		say("close");
+		running = 0;
+		return;
+	}
+	say("close dlg");
+	xdg_toplevel_destroy(t);
+	xdg_surface_destroy(win->xsurface);
+	wl_surface_destroy(win->surface);
+	win->surface = NULL;
 }
 
 static const struct xdg_toplevel_listener toplevel_listener = {
     .configure = on_toplevel_configure,
     .close = on_toplevel_close,
 };
+
+static void open_toplevel(struct win *w, const char *app_id,
+                          struct xdg_toplevel *parent) {
+	w->surface = wl_compositor_create_surface(compositor);
+	w->xsurface = xdg_wm_base_get_xdg_surface(wm_base, w->surface);
+	xdg_surface_add_listener(w->xsurface, &surface_listener, w);
+	w->top = xdg_surface_get_toplevel(w->xsurface);
+	xdg_toplevel_add_listener(w->top, &toplevel_listener, w);
+	xdg_toplevel_set_app_id(w->top, app_id);
+	if (parent)
+		xdg_toplevel_set_parent(w->top, parent);
+	if (w->min_w || w->min_h)
+		xdg_toplevel_set_min_size(w->top, w->min_w, w->min_h);
+	if (w == &main_win && want_full)
+		xdg_toplevel_set_fullscreen(w->top, NULL);
+	wl_surface_commit(w->surface);
+}
 
 static void inherited(void) {
 	char line[128];
@@ -290,7 +399,7 @@ static void inherited(void) {
 	fflush(stdout);
 }
 
-static int open_window(struct wl_display *display, const char *app_id) {
+static int open_window(struct wl_display *display) {
 	if (!compositor || !shm || !wm_base) {
 		fprintf(stderr, "missing globals for a window\n");
 		return 1;
@@ -298,29 +407,43 @@ static int open_window(struct wl_display *display, const char *app_id) {
 	xdg_wm_base_add_listener(wm_base, &wm_base_listener, NULL);
 	if (seat)
 		wl_seat_add_listener(seat, &seat_listener, NULL);
-	surface = wl_compositor_create_surface(compositor);
-	xsurface = xdg_wm_base_get_xdg_surface(wm_base, surface);
-	xdg_surface_add_listener(xsurface, &surface_listener, NULL);
-	struct xdg_toplevel *top = xdg_surface_get_toplevel(xsurface);
-	xdg_toplevel_add_listener(top, &toplevel_listener, NULL);
-	xdg_toplevel_set_app_id(top, app_id);
-	if (min_w || min_h)
-		xdg_toplevel_set_min_size(top, min_w, min_h);
-	wl_surface_commit(surface);
+	open_toplevel(&main_win, app, NULL);
 	while (running && wl_display_dispatch(display) != -1)
 		;
 	return 0;
 }
 
+static int option(const char *o) {
+	if (sscanf(o, "min=%dx%d", &main_win.min_w, &main_win.min_h) == 2)
+		return 0;
+	if (sscanf(o, "dialog=%dx%d", &dialog_win.want_w, &dialog_win.want_h) ==
+	    2) {
+		want_dialog = 1;
+		return 0;
+	}
+	if (strcmp(o, "full") == 0) {
+		want_full = 1;
+		return 0;
+	}
+	if (strcmp(o, "menu") == 0) {
+		want_menu = 1;
+		return 0;
+	}
+	return -1;
+}
+
 int main(int argc, char **argv) {
 	int window = argc >= 3 && strcmp(argv[1], "window") == 0;
-	if (window && argc == 5) {
-		min_w = atoi(argv[3]);
-		min_h = atoi(argv[4]);
-	} else if (argc != 1 && !(window && argc == 3)) {
-		fprintf(stderr, "usage: client [window app_id [min_w min_h]]\n");
+	int bad = argc != 1 && !window;
+	for (int i = 3; window && i < argc; i++)
+		bad |= option(argv[i]) < 0;
+	if (bad) {
+		fprintf(stderr, "usage: client [window app_id [min=WxH] [full] "
+		                "[dialog=WxH] [menu]]\n");
 		return 2;
 	}
+	if (window)
+		app = argv[2];
 
 	struct wl_display *display = wl_display_connect(NULL);
 	if (!display) {
@@ -335,7 +458,7 @@ int main(int argc, char **argv) {
 	}
 	if (window) {
 		inherited();
-		return open_window(display, argv[2]);
+		return open_window(display);
 	}
 
 	int rc = 0;

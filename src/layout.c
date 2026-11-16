@@ -242,3 +242,21 @@ int layout_compute(int nh, int nv, int block, int w, int h,
 	}
 	return 0;
 }
+
+static void centre(int parent, int want, int b, int *at, int *size) {
+	int room = parent - 2 * b;
+	int inner = want > 0 && want < room ? want : room;
+	if (inner < 1)
+		inner = 1;
+	*size = inner + 2 * b;
+	*at = (parent - *size) / 2;
+	if (*at < 0)
+		*at = 0;
+}
+
+struct layout_rect layout_dialog(int pw, int ph, int dw, int dh, int b) {
+	struct layout_rect r;
+	centre(pw, dw, b, &r.x, &r.w);
+	centre(ph, dh, b, &r.y, &r.h);
+	return r;
+}

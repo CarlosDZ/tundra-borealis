@@ -9,7 +9,8 @@
 struct desk {
 	struct grid grid;
 	struct slots canvas[DESK_CANVASES];
-	unsigned int focus[DESK_CANVASES]; /* 0: the canvas focuses nothing */
+	unsigned int focus[DESK_CANVASES];      /* 0: the canvas focuses nothing */
+	unsigned int fullscreen[DESK_CANVASES]; /* 0: none */
 	int w, h;
 };
 
@@ -32,8 +33,15 @@ int desk_close(struct desk *d, unsigned int id);
  * the keyboard. 0, or -1 if id is not on the desk. */
 int desk_focus_window(struct desk *d, unsigned int id);
 
-/* Super + Tab, Super + Shift + Tab and Super + R on the focused window. The
- * canvas they change, or -1 when there is nothing to do. */
+/* Super + F, or the client asking: id covers its canvas or stops doing so. A
+ * canvas has one at most; opening a window on it, closing id or sending it
+ * away ends it. The canvas, or -1 if id is not on the desk or nothing changes.
+ */
+int desk_fullscreen(struct desk *d, unsigned int id, int on);
+
+/* Super + Tab, Super + Shift + Tab and Super + R on the focused window, never
+ * while its canvas has a window in fullscreen. The canvas they change, or -1
+ * when there is nothing to do. */
 int desk_focus_next(struct desk *d);
 int desk_move(struct desk *d);
 int desk_rotate(struct desk *d);

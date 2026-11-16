@@ -47,13 +47,20 @@ void server_arrange(struct server *s, int index) {
 	struct slots_place p[LAYOUT_MAX];
 	struct layout l;
 	int n = desk_place(&s->desk, index, p, &l);
+	struct window *full = NULL;
 	for (int i = 0; i < n; i++) {
 		struct window *w = xdg_window(s, p[i].id);
 		if (!w)
 			continue;
+		if (p[i].id == s->desk.fullscreen[index]) {
+			full = w;
+			continue;
+		}
 		struct wlr_box r = {p[i].r.x, p[i].r.y, p[i].r.w, p[i].r.h};
 		xdg_place(w, index, r, p[i].id == s->desk.focus[index]);
 	}
+	if (full)
+		xdg_fullscreen(full, index, s->out_w, s->out_h);
 	for (int c = 0; c < DESK_CANVASES; c++)
 		wlr_scene_node_set_enabled(&s->canvas[c]->node,
 		                           grid_is_shown(&s->desk.grid, desk_pos(c)));
@@ -76,6 +83,8 @@ static void update_size(struct server *s) {
 	int w = 0, h = 0;
 	if (o)
 		wlr_output_effective_resolution(o->wlr_output, &w, &h);
+	s->out_w = w;
+	s->out_h = h;
 	wlr_scene_rect_set_size(s->background, w, h);
 	desk_resize(&s->desk, w - XDG_GAP, h - XDG_GAP);
 	server_arrange_all(s);

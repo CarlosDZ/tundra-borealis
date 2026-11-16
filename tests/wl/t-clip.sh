@@ -8,7 +8,7 @@ fi
 
 open small
 wait_count 1
-open big 2000 2000
+open big min=2000x2000
 
 if wait_settled 2; then
 	ok "two windows settle"

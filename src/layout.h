@@ -45,4 +45,9 @@ int layout_has_block(int nh, int nv);
  * with no windows, more than LAYOUT_MAX or a canvas too small to split. */
 int layout_compute(int nh, int nv, int block, int w, int h, struct layout *out);
 
+/* A dialog of dw x dh with a border of b, centred over a parent client area
+ * of pw x ph: its outer box, relative to that area, never past it. A side the
+ * dialog has not chosen yet (0) takes all the room. */
+struct layout_rect layout_dialog(int pw, int ph, int dw, int dh, int b);
+
 #endif

@@ -54,6 +54,7 @@ int desk_open(struct desk *d, unsigned int id, char type) {
 	    slots_add(&d->canvas[c], id, type) < 0)
 		return -1;
 	d->focus[c] = id;
+	d->fullscreen[c] = 0;
 	return c;
 }
 
@@ -63,13 +64,32 @@ int desk_close(struct desk *d, unsigned int id) {
 		return -1;
 	if (d->focus[c] == id)
 		d->focus[c] = after(d, c, id);
+	if (d->fullscreen[c] == id)
+		d->fullscreen[c] = 0;
 	slots_remove(&d->canvas[c], id);
 	return c;
 }
 
-int desk_focus_window(struct desk *d, unsigned int id) {
+int desk_fullscreen(struct desk *d, unsigned int id, int on) {
 	int c = desk_find(d, id);
 	if (c < 0)
+		return -1;
+	unsigned int now = d->fullscreen[c];
+	if (on && now != id) {
+		d->fullscreen[c] = id;
+		d->focus[c] = id;
+		return c;
+	}
+	if (!on && now == id) {
+		d->fullscreen[c] = 0;
+		return c;
+	}
+	return -1;
+}
+
+int desk_focus_window(struct desk *d, unsigned int id) {
+	int c = desk_find(d, id);
+	if (c < 0 || (d->fullscreen[c] && d->fullscreen[c] != id))
 		return -1;
 	d->focus[c] = id;
 	if (c != here(d))
@@ -79,6 +99,8 @@ int desk_focus_window(struct desk *d, unsigned int id) {
 
 int desk_focus_next(struct desk *d) {
 	int c = here(d);
+	if (d->fullscreen[c])
+		return -1;
 	unsigned int next = after(d, c, d->focus[c]);
 	if (!next)
 		return -1;
@@ -88,14 +110,16 @@ int desk_focus_next(struct desk *d) {
 
 int desk_move(struct desk *d) {
 	int c = here(d);
-	if (!d->focus[c] || slots_move(&d->canvas[c], d->focus[c]) < 0)
+	if (!d->focus[c] || d->fullscreen[c] ||
+	    slots_move(&d->canvas[c], d->focus[c]) < 0)
 		return -1;
 	return c;
 }
 
 int desk_rotate(struct desk *d) {
 	int c = here(d);
-	if (!d->focus[c] || slots_rotate(&d->canvas[c], d->focus[c]) < 0)
+	if (!d->focus[c] || d->fullscreen[c] ||
+	    slots_rotate(&d->canvas[c], d->focus[c]) < 0)
 		return -1;
 	return c;
 }
@@ -124,6 +148,8 @@ int desk_send(struct desk *d, struct grid_pos to) {
 		i++;
 	char type = src->w[i].type;
 	d->focus[from] = after(d, from, id);
+	if (d->fullscreen[from] == id)
+		d->fullscreen[from] = 0;
 	slots_remove(src, id);
 	slots_add(dst, id, type);
 	d->focus[desk_index(to)] = id;
