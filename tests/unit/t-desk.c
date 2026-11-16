@@ -94,6 +94,20 @@ int main(void) {
 	desk_goto(&d, at(1, 2));
 	CHECK(desk_open(&d, 200, 'H') == -1, "a full canvas refuses a new window");
 
+	desk_init(&d, 1920, 1048);
+	desk_open(&d, 1, 'H');
+	desk_open(&d, 2, 'H');
+	CHECK(desk_focus_window(&d, 1) == 0 && desk_focused(&d) == 1,
+	      "the pointer over a window focuses it");
+	grid_set_screens(&d.grid, GRID_EXTENDED);
+	desk_goto(&d, at(2, 1));
+	desk_open(&d, 3, 'H');
+	CHECK(desk_focus_window(&d, 1) == 0 && grid_same(d.grid.focus, at(1, 1)),
+	      "over a window on the other screen, that screen takes the keyboard");
+	CHECK(desk_focus_window(&d, 9) == -1, "an unknown id");
+
+	desk_init(&d, 1920, 1048);
+	desk_open(&d, 1, 'H');
 	desk_resize(&d, 1366, 736);
 	struct slots_place p[LAYOUT_MAX];
 	struct layout l;

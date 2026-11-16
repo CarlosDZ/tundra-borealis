@@ -56,6 +56,17 @@ int grid_other_screen(struct grid *g) {
 	return 0;
 }
 
+int grid_swipe(double dx, double dy, enum grid_dir *dir) {
+	double ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy;
+	if (ax < GRID_SWIPE_MIN && ay < GRID_SWIPE_MIN)
+		return -1;
+	if (ax >= ay)
+		*dir = dx > 0 ? GRID_RIGHT : GRID_LEFT;
+	else
+		*dir = dy < 0 ? GRID_DEEPER : GRID_SHALLOWER;
+	return 0;
+}
+
 struct grid_pos grid_shown(const struct grid *g, int screen) {
 	if (g->screens != GRID_EXTENDED)
 		return g->focus;

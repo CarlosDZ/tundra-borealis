@@ -28,6 +28,10 @@ int desk_open(struct desk *d, unsigned int id, char type);
 /* Removes id; the next window clockwise takes its focus. Its canvas, or -1. */
 int desk_close(struct desk *d, unsigned int id);
 
+/* The pointer went over id: it takes the focus of its canvas, and that canvas
+ * the keyboard. 0, or -1 if id is not on the desk. */
+int desk_focus_window(struct desk *d, unsigned int id);
+
 /* Super + Tab, Super + Shift + Tab and Super + R on the focused window. The
  * canvas they change, or -1 when there is nothing to do. */
 int desk_focus_next(struct desk *d);

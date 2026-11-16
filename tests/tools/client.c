@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,7 @@ static const char *wanted[] = {"wl_compositor", "wl_subcompositor", "wl_shm",
 
 static int seen[WANTED];
 static struct wl_compositor *compositor;
+static struct wl_seat *seat;
 static struct wl_shm *shm;
 static struct xdg_wm_base *wm_base;
 static struct wl_surface *surface;
@@ -37,6 +39,9 @@ static void on_global(void *data, struct wl_registry *registry, uint32_t name,
 		shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
 	else if (strcmp(interface, "xdg_wm_base") == 0)
 		wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
+	else if (strcmp(interface, "wl_seat") == 0 && !seat)
+		/* Version 1 keeps the events to the ones printed here */
+		seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
 }
 
 static void on_global_remove(void *data, struct wl_registry *registry,
@@ -50,6 +55,143 @@ static const struct wl_registry_listener registry_listener = {
     .global = on_global,
     .global_remove = on_global_remove,
 };
+
+static void say(const char *fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	vprintf(fmt, ap);
+	va_end(ap);
+	putchar('\n');
+	fflush(stdout);
+}
+
+static void kb_keymap(void *d, struct wl_keyboard *k, uint32_t format, int fd,
+                      uint32_t size) {
+	(void)d;
+	(void)k;
+	(void)format;
+	(void)size;
+	close(fd);
+}
+
+static void kb_enter(void *d, struct wl_keyboard *k, uint32_t serial,
+                     struct wl_surface *s, struct wl_array *keys) {
+	(void)d;
+	(void)k;
+	(void)serial;
+	(void)s;
+	(void)keys;
+	say("kbd-enter");
+}
+
+static void kb_leave(void *d, struct wl_keyboard *k, uint32_t serial,
+                     struct wl_surface *s) {
+	(void)d;
+	(void)k;
+	(void)serial;
+	(void)s;
+	say("kbd-leave");
+}
+
+static void kb_key(void *d, struct wl_keyboard *k, uint32_t serial,
+                   uint32_t time, uint32_t key, uint32_t state) {
+	(void)d;
+	(void)k;
+	(void)serial;
+	(void)time;
+	say("key %u %u", key, state);
+}
+
+static void kb_modifiers(void *d, struct wl_keyboard *k, uint32_t serial,
+                         uint32_t dep, uint32_t lat, uint32_t lock,
+                         uint32_t group) {
+	(void)d;
+	(void)k;
+	(void)serial;
+	(void)dep;
+	(void)lat;
+	(void)lock;
+	(void)group;
+}
+
+static const struct wl_keyboard_listener keyboard_listener = {
+    .keymap = kb_keymap,
+    .enter = kb_enter,
+    .leave = kb_leave,
+    .key = kb_key,
+    .modifiers = kb_modifiers,
+};
+
+static void ptr_enter(void *d, struct wl_pointer *p, uint32_t serial,
+                      struct wl_surface *s, wl_fixed_t x, wl_fixed_t y) {
+	(void)d;
+	(void)p;
+	(void)serial;
+	(void)s;
+	(void)x;
+	(void)y;
+	say("ptr-enter");
+}
+
+static void ptr_leave(void *d, struct wl_pointer *p, uint32_t serial,
+                      struct wl_surface *s) {
+	(void)d;
+	(void)p;
+	(void)serial;
+	(void)s;
+	say("ptr-leave");
+}
+
+static void ptr_motion(void *d, struct wl_pointer *p, uint32_t time,
+                       wl_fixed_t x, wl_fixed_t y) {
+	(void)d;
+	(void)p;
+	(void)time;
+	(void)x;
+	(void)y;
+}
+
+static void ptr_button(void *d, struct wl_pointer *p, uint32_t serial,
+                       uint32_t time, uint32_t button, uint32_t state) {
+	(void)d;
+	(void)p;
+	(void)serial;
+	(void)time;
+	say("button %u %u", button, state);
+}
+
+static void ptr_axis(void *d, struct wl_pointer *p, uint32_t time,
+                     uint32_t axis, wl_fixed_t value) {
+	(void)d;
+	(void)p;
+	(void)time;
+	say("axis %u %.0f", axis, wl_fixed_to_double(value));
+}
+
+static const struct wl_pointer_listener pointer_listener = {
+    .enter = ptr_enter,
+    .leave = ptr_leave,
+    .motion = ptr_motion,
+    .button = ptr_button,
+    .axis = ptr_axis,
+};
+
+static void seat_caps(void *d, struct wl_seat *s, uint32_t caps) {
+	(void)d;
+	static struct wl_keyboard *kb;
+	static struct wl_pointer *ptr;
+	if ((caps & WL_SEAT_CAPABILITY_KEYBOARD) && !kb) {
+		kb = wl_seat_get_keyboard(s);
+		wl_keyboard_add_listener(kb, &keyboard_listener, NULL);
+	}
+	if ((caps & WL_SEAT_CAPABILITY_POINTER) && !ptr) {
+		ptr = wl_seat_get_pointer(s);
+		wl_pointer_add_listener(ptr, &pointer_listener, NULL);
+	}
+}
+
+static const struct wl_seat_listener seat_listener = {.capabilities =
+                                                          seat_caps};
 
 static void on_ping(void *data, struct xdg_wm_base *b, uint32_t serial) {
 	(void)data;
@@ -126,6 +268,7 @@ static void on_toplevel_configure(void *data, struct xdg_toplevel *t, int32_t w,
 static void on_toplevel_close(void *data, struct xdg_toplevel *t) {
 	(void)data;
 	(void)t;
+	say("close");
 	running = 0;
 }
 
@@ -134,12 +277,27 @@ static const struct xdg_toplevel_listener toplevel_listener = {
     .close = on_toplevel_close,
 };
 
+static void inherited(void) {
+	char line[128];
+	FILE *f = fopen("/proc/self/status", "r");
+	if (!f)
+		return;
+	while (fgets(line, sizeof(line), f))
+		if (strncmp(line, "SigBlk:", 7) == 0 ||
+		    strncmp(line, "SigIgn:", 7) == 0)
+			fputs(line, stdout);
+	fclose(f);
+	fflush(stdout);
+}
+
 static int open_window(struct wl_display *display, const char *app_id) {
 	if (!compositor || !shm || !wm_base) {
 		fprintf(stderr, "missing globals for a window\n");
 		return 1;
 	}
 	xdg_wm_base_add_listener(wm_base, &wm_base_listener, NULL);
+	if (seat)
+		wl_seat_add_listener(seat, &seat_listener, NULL);
 	surface = wl_compositor_create_surface(compositor);
 	xsurface = xdg_wm_base_get_xdg_surface(wm_base, surface);
 	xdg_surface_add_listener(xsurface, &surface_listener, NULL);
@@ -175,8 +333,10 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "the compositor closed the connection\n");
 		return 1;
 	}
-	if (window)
+	if (window) {
+		inherited();
 		return open_window(display, argv[2]);
+	}
 
 	int rc = 0;
 	for (size_t i = 0; i < WANTED; i++) {

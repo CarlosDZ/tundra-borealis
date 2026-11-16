@@ -7,11 +7,25 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <fcntl.h>
+#include <linux/input-event-codes.h>
+#include <time.h>
+#include <wlr/interfaces/wlr_keyboard.h>
+#include <wlr/interfaces/wlr_pointer.h>
+#include <wlr/types/wlr_cursor.h>
+
+#include "input.h"
 #include "testsock.h"
 #include "xdg.h"
 
 #define TESTSOCK_NAME "borealis-test"
 #define TESTSOCK_LINE 256
+
+static const struct wlr_keyboard_impl keyboard_impl = {.name = "test"};
+static const struct wlr_pointer_impl pointer_impl = {.name = "test"};
+static struct wlr_keyboard keyboard;
+static struct wlr_pointer pointer;
+static int devices;
 
 static int listen_fd = -1;
 static struct wl_event_source *source;
@@ -43,6 +57,125 @@ static void list_windows(struct server *s, FILE *f) {
 	}
 }
 
+static uint32_t now_msec(void) {
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return (uint32_t)(t.tv_sec * 1000 + t.tv_nsec / 1000000);
+}
+
+static void show_focus(struct server *s, FILE *f) {
+	struct window *w = s->active;
+	const char *app = w ? w->toplevel->app_id : NULL;
+	struct grid_pos p = s->desk.grid.focus;
+	fprintf(f, "focus %u %s %d%d\n", w ? w->id : 0, app && *app ? app : "-",
+	        p.h, p.d);
+}
+
+static void frame(void) {
+	wl_signal_emit_mutable(&pointer.events.frame, &pointer);
+}
+
+static int key(int code, const char *how) {
+	struct wlr_keyboard_key_event e = {.time_msec = now_msec(),
+	                                   .keycode = (uint32_t)code,
+	                                   .update_state = true};
+	if (strcmp(how, "down") == 0)
+		e.state = WL_KEYBOARD_KEY_STATE_PRESSED;
+	else if (strcmp(how, "up") == 0)
+		e.state = WL_KEYBOARD_KEY_STATE_RELEASED;
+	else
+		return -1;
+	wlr_keyboard_notify_key(&keyboard, &e);
+	return 0;
+}
+
+static void move(struct server *s, double x, double y) {
+	struct wlr_pointer_motion_event e = {
+	    .pointer = &pointer,
+	    .time_msec = now_msec(),
+	    .delta_x = x - s->cursor->x,
+	    .delta_y = y - s->cursor->y,
+	};
+	e.unaccel_dx = e.delta_x;
+	e.unaccel_dy = e.delta_y;
+	wl_signal_emit_mutable(&pointer.events.motion, &e);
+	frame();
+}
+
+static int button(const char *how) {
+	struct wlr_pointer_button_event e = {
+	    .pointer = &pointer, .time_msec = now_msec(), .button = BTN_LEFT};
+	if (strcmp(how, "down") == 0)
+		e.state = WL_POINTER_BUTTON_STATE_PRESSED;
+	else if (strcmp(how, "up") == 0)
+		e.state = WL_POINTER_BUTTON_STATE_RELEASED;
+	else
+		return -1;
+	wl_signal_emit_mutable(&pointer.events.button, &e);
+	frame();
+	return 0;
+}
+
+static void scroll(double value) {
+	struct wlr_pointer_axis_event e = {
+	    .pointer = &pointer,
+	    .time_msec = now_msec(),
+	    .source = WL_POINTER_AXIS_SOURCE_FINGER,
+	    .orientation = WL_POINTER_AXIS_VERTICAL_SCROLL,
+	    .relative_direction = WL_POINTER_AXIS_RELATIVE_DIRECTION_IDENTICAL,
+	    .delta = value,
+	};
+	wl_signal_emit_mutable(&pointer.events.axis, &e);
+	frame();
+}
+
+static void swipe(unsigned int fingers, double dx, double dy) {
+	uint32_t t = now_msec();
+	struct wlr_pointer_swipe_begin_event b = {&pointer, t, fingers};
+	struct wlr_pointer_swipe_update_event u = {&pointer, t, fingers, dx, dy};
+	struct wlr_pointer_swipe_end_event e = {&pointer, t, false};
+	wl_signal_emit_mutable(&pointer.events.swipe_begin, &b);
+	wl_signal_emit_mutable(&pointer.events.swipe_update, &u);
+	wl_signal_emit_mutable(&pointer.events.swipe_end, &e);
+}
+
+static int run(struct server *s, const char *line, FILE *f) {
+	char how[16];
+	int code;
+	double x, y;
+	unsigned int fingers;
+	if (strcmp(line, "windows") == 0) {
+		list_windows(s, f);
+		return 0;
+	}
+	if (strcmp(line, "focus") == 0) {
+		show_focus(s, f);
+		return 0;
+	}
+	if (strcmp(line, "pointer") == 0) {
+		fprintf(f, "pointer %.0f %.0f %d\n", s->cursor->x, s->cursor->y,
+		        s->pointer_locked);
+		return 0;
+	}
+	if (sscanf(line, "key %d %15s", &code, how) == 2)
+		return key(code, how);
+	if (sscanf(line, "move %lf %lf", &x, &y) == 2) {
+		move(s, x, y);
+		return 0;
+	}
+	if (sscanf(line, "button %15s", how) == 1)
+		return button(how);
+	if (sscanf(line, "scroll %lf", &x) == 1) {
+		scroll(x);
+		return 0;
+	}
+	if (sscanf(line, "swipe %u %lf %lf", &fingers, &x, &y) == 3) {
+		swipe(fingers, x, y);
+		return 0;
+	}
+	return -1;
+}
+
 static void answer(struct server *s, int fd) {
 	char line[TESTSOCK_LINE];
 	size_t len = 0;
@@ -54,15 +187,18 @@ static void answer(struct server *s, int fd) {
 	}
 	line[len] = '\0';
 
-	FILE *f = fdopen(dup(fd), "w");
-	if (!f)
+	/* dup() drops close-on-exec */
+	int out = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+	FILE *f = out < 0 ? NULL : fdopen(out, "w");
+	if (!f) {
+		if (out >= 0)
+			close(out);
 		return;
-	if (strcmp(line, "windows") == 0) {
-		list_windows(s, f);
-		fprintf(f, "ok\n");
-	} else {
-		fprintf(f, "error unknown command: %s\n", line);
 	}
+	if (run(s, line, f) == 0)
+		fprintf(f, "ok\n");
+	else
+		fprintf(f, "error: %s\n", line);
 	fclose(f);
 }
 
@@ -97,10 +233,22 @@ int testsock_init(struct server *s) {
 	}
 	source = wl_event_loop_add_fd(wl_display_get_event_loop(s->display),
 	                              listen_fd, WL_EVENT_READABLE, on_accept, s);
-	return source ? 0 : -1;
+	if (!source)
+		return -1;
+	wlr_keyboard_init(&keyboard, &keyboard_impl, "test-keyboard");
+	wlr_pointer_init(&pointer, &pointer_impl, "test-pointer");
+	input_add_device(s, &keyboard.base);
+	input_add_device(s, &pointer.base);
+	devices = 1;
+	return 0;
 }
 
 void testsock_finish(void) {
+	if (devices) {
+		wlr_keyboard_finish(&keyboard);
+		wlr_pointer_finish(&pointer);
+		devices = 0;
+	}
 	if (source)
 		wl_event_source_remove(source);
 	if (listen_fd >= 0) {

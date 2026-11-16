@@ -38,6 +38,12 @@ int grid_goto(struct grid *g, struct grid_pos p);
  * with a single or mirrored screen. */
 int grid_other_screen(struct grid *g);
 
+/* A three finger swipe goes where the fingers go: up is the next depth. The
+ * longer axis decides; shorter than GRID_SWIPE_MIN does nothing. 0 and *dir,
+ * or -1. */
+#define GRID_SWIPE_MIN 40.0
+int grid_swipe(double dx, double dy, enum grid_dir *dir);
+
 struct grid_pos grid_shown(const struct grid *g, int screen);
 int grid_focused_screen(const struct grid *g);
 int grid_is_shown(const struct grid *g, struct grid_pos p);

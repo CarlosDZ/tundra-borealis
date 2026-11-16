@@ -3,6 +3,7 @@
 #include <wlr/types/wlr_scene.h>
 #include <wlr/util/edges.h>
 
+#include "input.h"
 #include "xdg.h"
 
 #define XDG_SHELL_VERSION 6
@@ -119,13 +120,18 @@ static void window_map(struct wl_listener *listener, void *data) {
 	(void)data;
 	struct window *w = wl_container_of(listener, w, map);
 	wlr_scene_node_set_enabled(&w->tree->node, true);
+	input_focus(w->server, 0);
 }
 
 static void window_unmap(struct wl_listener *listener, void *data) {
 	(void)data;
 	struct window *w = wl_container_of(listener, w, unmap);
 	wlr_scene_node_set_enabled(&w->tree->node, false);
+	if (w->server->active == w)
+		w->server->active = NULL;
 	unplace(w);
+	if (!w->server->stopping)
+		input_focus(w->server, 0);
 }
 
 /* The protocol wants a configure for every request */
@@ -158,6 +164,8 @@ static void decoration_forget(struct window *w) {
 static void window_destroy(struct wl_listener *listener, void *data) {
 	(void)data;
 	struct window *w = wl_container_of(listener, w, destroy);
+	if (w->server->active == w)
+		w->server->active = NULL;
 	unplace(w);
 	decoration_forget(w);
 	wl_list_remove(&w->map.link);
@@ -197,6 +205,7 @@ static void new_toplevel(struct wl_listener *listener, void *data) {
 		return;
 	}
 	wlr_scene_node_set_enabled(&w->tree->node, false);
+	w->tree->node.data = w;
 	wlr_scene_node_set_position(&w->surface->node, XDG_BORDER, XDG_BORDER);
 	wlr_scene_node_set_position(&w->popups->node, XDG_BORDER, XDG_BORDER);
 	t->base->data = w->popups;

@@ -4,7 +4,10 @@
 #include <wayland-server-core.h>
 
 #include "desk.h"
+#include "keys.h"
 #include "prefs.h"
+
+struct window;
 
 struct server {
 	struct wl_display *display;
@@ -20,6 +23,10 @@ struct server {
 	struct wlr_xdg_shell *xdg_shell;
 	struct wlr_xdg_decoration_manager_v1 *decorations;
 	struct wlr_seat *seat;
+	struct wlr_session *session; /* NULL without a seat to switch, headless */
+	struct wlr_cursor *cursor;
+	struct wlr_xcursor_manager *cursor_mgr;
+	struct wlr_pointer_gestures_v1 *gestures;
 
 	struct wl_list outputs; /* struct output.link */
 	struct wl_list windows; /* struct window.link */
@@ -27,10 +34,23 @@ struct server {
 	struct wl_listener new_toplevel;
 	struct wl_listener new_popup;
 	struct wl_listener new_decoration;
+	struct wl_list keyboards; /* struct keyboard.link */
+	struct wl_listener new_input, request_set_cursor;
+	struct wl_listener cursor_motion, cursor_motion_absolute, cursor_button,
+	    cursor_axis, cursor_frame;
+	struct wl_listener swipe_begin, swipe_update, swipe_end;
+	struct wl_listener pinch_begin, pinch_update, pinch_end;
+	struct wl_listener hold_begin, hold_end;
+	int input_ready;
 
 	struct desk desk;
 	struct prefs prefs;
 	unsigned int next_id;
+	struct keys keys;
+	struct window *active;
+	int pointer_locked;
+	uint32_t swipe_fingers; /* 0 when no swipe is going on */
+	double swipe_dx, swipe_dy;
 	int stopping;
 };
 
@@ -39,5 +59,7 @@ int server_run(void);
 
 void server_arrange(struct server *s, int index);
 void server_arrange_all(struct server *s);
+
+void server_canvas_origin(struct server *s, int index, int *x, int *y);
 
 #endif
