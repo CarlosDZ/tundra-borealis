@@ -169,6 +169,19 @@ static void place_new(struct window *w) {
 		wlr_xdg_toplevel_set_size(w->toplevel, 0, 0);
 }
 
+static void pin_new(struct window *w) {
+	struct server *s = w->server;
+	struct fixed_run *r = w->run;
+	if (desk_pin(&s->desk, r->canvas, r->prog, w->id) < 0)
+		return;
+	w->placed = 1;
+	if (w->toplevel->requested.fullscreen)
+		desk_fullscreen(&s->desk, w->id, 1);
+	server_arrange(s, r->canvas);
+	if (w->box.width == 0)
+		wlr_xdg_toplevel_set_size(w->toplevel, 0, 0);
+}
+
 static void unplace(struct window *w) {
 	if (!w->placed)
 		return;
@@ -224,7 +237,10 @@ static void window_commit(struct wl_listener *listener, void *data) {
 	}
 	wlr_xdg_toplevel_set_tiled(t, WLR_EDGE_TOP | WLR_EDGE_BOTTOM |
 	                                  WLR_EDGE_LEFT | WLR_EDGE_RIGHT);
-	place_new(w);
+	if (w->run)
+		pin_new(w);
+	else
+		place_new(w);
 	if (!w->placed) {
 		wlr_xdg_toplevel_set_size(t, 0, 0);
 		wlr_xdg_toplevel_send_close(t);
@@ -344,6 +360,7 @@ static void new_toplevel(struct wl_listener *listener, void *data) {
 	w->server = s;
 	w->id = ++s->next_id;
 	w->toplevel = t;
+	w->run = clients_run_of(s, wl_resource_get_client(t->resource));
 	w->tree = wlr_scene_tree_create(s->limbo);
 	if (!w->tree) {
 		free(w);

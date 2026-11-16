@@ -23,12 +23,39 @@ void desk_resize(struct desk *d, int w, int h) {
 	d->h = h;
 }
 
+static int pin_of(const struct desk *d, int c, unsigned int id) {
+	if (!d->fixed[c] || !id)
+		return -1;
+	for (int i = 0; i < d->fixed[c]->n; i++)
+		if (d->pinned[c][i] == id)
+			return i;
+	return -1;
+}
+
 int desk_find(const struct desk *d, unsigned int id) {
-	for (int c = 0; c < DESK_CANVASES; c++)
+	for (int c = 0; c < DESK_CANVASES; c++) {
 		for (int i = 0; i < d->canvas[c].n; i++)
 			if (d->canvas[c].w[i].id == id)
 				return c;
+		if (pin_of(d, c, id) >= 0)
+			return c;
+	}
 	return -1;
+}
+
+void desk_set_fixed(struct desk *d, int index, const struct fixed_canvas *c) {
+	d->fixed[index] = c;
+	memset(d->pinned[index], 0, sizeof(d->pinned[index]));
+}
+
+int desk_pin(struct desk *d, int index, int prog, unsigned int id) {
+	if (!d->fixed[index] || prog < 0 || prog >= d->fixed[index]->n ||
+	    d->pinned[index][prog] || !id || desk_find(d, id) >= 0)
+		return -1;
+	d->pinned[index][prog] = id;
+	if (!d->focus[index])
+		d->focus[index] = id;
+	return 0;
 }
 
 static int here(const struct desk *d) { return desk_index(d->grid.focus); }
@@ -37,7 +64,19 @@ unsigned int desk_focused(const struct desk *d) { return d->focus[here(d)]; }
 
 int desk_place(const struct desk *d, int index, struct slots_place *out,
                struct layout *l) {
-	return slots_place(&d->canvas[index], d->w, d->h, out, l);
+	const struct fixed_canvas *fc = d->fixed[index];
+	if (!fc)
+		return slots_place(&d->canvas[index], d->w, d->h, out, l);
+	memset(l, 0, sizeof(*l));
+	int n = 0;
+	for (int i = 0; i < fc->n; i++) {
+		if (!d->pinned[index][i])
+			continue;
+		out[n].id = d->pinned[index][i];
+		out[n].r = fixed_rect(&fc->p[i], d->w, d->h);
+		n++;
+	}
+	return n;
 }
 
 static unsigned int after(const struct desk *d, int c, unsigned int id) {
@@ -50,7 +89,7 @@ static unsigned int after(const struct desk *d, int c, unsigned int id) {
 
 int desk_open(struct desk *d, unsigned int id, char type) {
 	int c = here(d);
-	if (id == 0 || desk_find(d, id) >= 0 ||
+	if (id == 0 || d->fixed[c] || desk_find(d, id) >= 0 ||
 	    slots_add(&d->canvas[c], id, type) < 0)
 		return -1;
 	d->focus[c] = id;
@@ -66,7 +105,11 @@ int desk_close(struct desk *d, unsigned int id) {
 		d->focus[c] = after(d, c, id);
 	if (d->fullscreen[c] == id)
 		d->fullscreen[c] = 0;
-	slots_remove(&d->canvas[c], id);
+	int pin = pin_of(d, c, id);
+	if (pin >= 0)
+		d->pinned[c][pin] = 0;
+	else
+		slots_remove(&d->canvas[c], id);
 	return c;
 }
 
@@ -110,7 +153,7 @@ int desk_focus_next(struct desk *d) {
 
 int desk_move(struct desk *d) {
 	int c = here(d);
-	if (!d->focus[c] || d->fullscreen[c] ||
+	if (!d->focus[c] || d->fullscreen[c] || d->fixed[c] ||
 	    slots_move(&d->canvas[c], d->focus[c]) < 0)
 		return -1;
 	return c;
@@ -118,7 +161,7 @@ int desk_move(struct desk *d) {
 
 int desk_rotate(struct desk *d) {
 	int c = here(d);
-	if (!d->focus[c] || d->fullscreen[c] ||
+	if (!d->focus[c] || d->fullscreen[c] || d->fixed[c] ||
 	    slots_rotate(&d->canvas[c], d->focus[c]) < 0)
 		return -1;
 	return c;
@@ -138,7 +181,8 @@ int desk_goto(struct desk *d, struct grid_pos p) {
 int desk_send(struct desk *d, struct grid_pos to) {
 	int from = here(d);
 	unsigned int id = d->focus[from];
-	if (!id || !grid_valid(to) || desk_index(to) == from)
+	if (!id || !grid_valid(to) || desk_index(to) == from || d->fixed[from] ||
+	    d->fixed[desk_index(to)])
 		return -1;
 	struct slots *src = &d->canvas[from], *dst = &d->canvas[desk_index(to)];
 	if (dst->n >= LAYOUT_MAX)

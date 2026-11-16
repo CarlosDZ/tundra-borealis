@@ -1,4 +1,5 @@
 #include "desk.c"
+#include "fixed.c"
 #include "grid.c"
 #include "layout.c"
 #include "slots.c"
@@ -137,6 +138,47 @@ int main(void) {
 	          d.fullscreen[desk_index(at(2, 1))] == 0,
 	      "sending it to another canvas ends it on both");
 	CHECK(desk_fullscreen(&d, 9, 1) == -1, "an unknown id");
+
+	static struct fixed_canvas fc;
+	char ferr[FIXED_ERR_MAX];
+	const char *conf = "art {\ncommand = a\nplace = 0 0\nsize = 100 100\n"
+	                   "privileges = none\n}\n"
+	                   "top {\ncommand = b\nplace = 50 0\nsize = 50 50\n"
+	                   "level = 1\nprivileges = none\n}\n";
+	fixed_parse(conf, strlen(conf), &fc, ferr);
+	desk_init(&d, 1000, 500);
+	desk_set_fixed(&d, desk_index(at(1, 2)), &fc);
+	desk_goto(&d, at(1, 2));
+	CHECK(desk_open(&d, 1, 'H') == -1, "a fixed canvas refuses a new window");
+	CHECK(desk_pin(&d, 1, 0, 7) == 0 && desk_pin(&d, 1, 1, 8) == 0,
+	      "each program gets its window");
+	CHECK(desk_pin(&d, 1, 0, 9) == -1, "a program has one window");
+	CHECK(desk_pin(&d, 0, 0, 9) == -1, "a working canvas pins nothing");
+	CHECK(desk_find(&d, 8) == 1, "a pinned window is on its canvas");
+	CHECK(desk_focused(&d) == 7, "the first one pinned takes the focus");
+	struct slots_place fp[LAYOUT_MAX];
+	struct layout fl;
+	CHECK(desk_place(&d, 1, fp, &fl) == 2 && fp[0].id == 7 &&
+	          fp[0].r.w == 1000 && fp[1].id == 8 && fp[1].r.x == 500 &&
+	          fp[1].r.w == 500 && fp[1].r.h == 250,
+	      "in its place, from the lowest level up");
+	CHECK(desk_focus_next(&d) == 1 && desk_focused(&d) == 8,
+	      "Super + Tab goes through the programs");
+	CHECK(desk_move(&d) == -1 && desk_rotate(&d) == -1,
+	      "a pinned window neither moves nor rotates");
+	CHECK(desk_send(&d, at(1, 1)) == -1 && desk_find(&d, 8) == 1,
+	      "nor goes to another canvas");
+	CHECK(desk_fullscreen(&d, 8, 1) == 1, "but it can go fullscreen");
+	desk_fullscreen(&d, 8, 0);
+	desk_goto(&d, at(1, 1));
+	desk_open(&d, 2, 'H');
+	CHECK(desk_send(&d, at(1, 2)) == -1 && desk_find(&d, 2) == 0,
+	      "nothing is sent onto a fixed canvas");
+	desk_goto(&d, at(1, 2));
+	CHECK(desk_close(&d, 8) == 1 && d.pinned[1][1] == 0 &&
+	          desk_focused(&d) == 7,
+	      "a pinned window that closes leaves its program free");
+	CHECK(desk_pin(&d, 1, 1, 10) == 0, "for the next window of that program");
 
 	desk_init(&d, 1920, 1048);
 	desk_open(&d, 1, 'H');

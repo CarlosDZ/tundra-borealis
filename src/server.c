@@ -28,6 +28,7 @@
 #define PREFS_FILE_MAX 65536
 
 static const float background_color[4] = {0.09f, 0.10f, 0.12f, 1.0f};
+static const float cover_color[4] = {0.35f, 0.12f, 0.12f, 1.0f};
 
 struct output {
 	struct wl_list link;
@@ -43,22 +44,55 @@ static struct output *main_output(struct server *s) {
 	return o;
 }
 
-void server_arrange(struct server *s, int index) {
-	struct slots_place p[LAYOUT_MAX];
-	struct layout l;
-	int n = desk_place(&s->desk, index, p, &l);
-	struct window *full = NULL;
-	for (int i = 0; i < n; i++) {
-		struct window *w = xdg_window(s, p[i].id);
-		if (!w)
-			continue;
-		if (p[i].id == s->desk.fullscreen[index]) {
-			full = w;
+static void arrange_fixed(struct server *s, int index) {
+	const struct fixed_canvas *fc = s->desk.fixed[index];
+	for (int i = 0; i < fc->n; i++) {
+		struct fixed_run *r = &s->runs[index][i];
+		struct layout_rect lr = fixed_rect(&fc->p[i], s->desk.w, s->desk.h);
+		struct wlr_box b = {lr.x, lr.y, lr.w, lr.h};
+		unsigned int id = s->desk.pinned[index][i];
+		struct window *w = id ? xdg_window(s, id) : NULL;
+		if (w && id != s->desk.fullscreen[index]) {
+			xdg_place(w, index, b, id == s->desk.focus[index]);
+			wlr_scene_node_raise_to_top(&w->tree->node);
+		}
+		if (!r->covered) {
+			if (r->cover)
+				wlr_scene_node_set_enabled(&r->cover->node, false);
 			continue;
 		}
-		struct wlr_box r = {p[i].r.x, p[i].r.y, p[i].r.w, p[i].r.h};
-		xdg_place(w, index, r, p[i].id == s->desk.focus[index]);
+		if (!r->cover)
+			r->cover =
+			    wlr_scene_rect_create(s->canvas[index], 0, 0, cover_color);
+		if (!r->cover)
+			continue;
+		wlr_scene_node_set_position(&r->cover->node, b.x + XDG_GAP,
+		                            b.y + XDG_GAP);
+		wlr_scene_rect_set_size(r->cover, b.width - XDG_GAP,
+		                        b.height - XDG_GAP);
+		wlr_scene_node_set_enabled(&r->cover->node, true);
+		wlr_scene_node_raise_to_top(&r->cover->node);
 	}
+}
+
+void server_arrange(struct server *s, int index) {
+	if (s->desk.fixed[index]) {
+		arrange_fixed(s, index);
+	} else {
+		struct slots_place p[LAYOUT_MAX];
+		struct layout l;
+		int n = desk_place(&s->desk, index, p, &l);
+		for (int i = 0; i < n; i++) {
+			struct window *w = xdg_window(s, p[i].id);
+			if (!w || p[i].id == s->desk.fullscreen[index])
+				continue;
+			struct wlr_box r = {p[i].r.x, p[i].r.y, p[i].r.w, p[i].r.h};
+			xdg_place(w, index, r, p[i].id == s->desk.focus[index]);
+		}
+	}
+	struct window *full = s->desk.fullscreen[index]
+	                          ? xdg_window(s, s->desk.fullscreen[index])
+	                          : NULL;
 	if (full)
 		xdg_fullscreen(full, index, s->out_w, s->out_h);
 	for (int c = 0; c < DESK_CANVASES; c++)
@@ -226,6 +260,7 @@ int server_run(void) {
 	wl_list_init(&s.keyboards);
 	desk_init(&s.desk, 0, 0);
 	load_prefs(&s);
+	clients_load(&s);
 
 	s.display = wl_display_create();
 	if (!s.display) {
@@ -306,6 +341,7 @@ int server_run(void) {
 		goto out;
 	}
 	setenv("WAYLAND_DISPLAY", socket, 1);
+	clients_start(&s);
 
 	sigterm = wl_event_loop_add_signal(loop, SIGTERM, on_signal, s.display);
 	sigint = wl_event_loop_add_signal(loop, SIGINT, on_signal, s.display);
@@ -322,6 +358,7 @@ int server_run(void) {
 
 out:
 	s.stopping = 1;
+	clients_finish(&s);
 	testsock_finish();
 	if (sigterm)
 		wl_event_source_remove(sigterm);

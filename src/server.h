@@ -3,6 +3,7 @@
 
 #include <wayland-server-core.h>
 
+#include "clients.h"
 #include "desk.h"
 #include "keys.h"
 #include "prefs.h"
@@ -46,6 +47,8 @@ struct server {
 
 	struct desk desk;
 	struct prefs prefs;
+	struct fixed_canvas fixed[DESK_CANVASES];
+	struct fixed_run runs[DESK_CANVASES][FIXED_MAX];
 	unsigned int next_id;
 	struct keys keys;
 	struct window *active;

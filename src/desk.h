@@ -1,6 +1,7 @@
 #ifndef TUNDRA_DESK_H
 #define TUNDRA_DESK_H
 
+#include "fixed.h"
 #include "grid.h"
 #include "slots.h"
 
@@ -11,6 +12,8 @@ struct desk {
 	struct slots canvas[DESK_CANVASES];
 	unsigned int focus[DESK_CANVASES];
 	unsigned int fullscreen[DESK_CANVASES];
+	const struct fixed_canvas *fixed[DESK_CANVASES];
+	unsigned int pinned[DESK_CANVASES][FIXED_MAX];
 	int w, h;
 };
 
@@ -21,6 +24,9 @@ void desk_init(struct desk *d, int w, int h);
 void desk_resize(struct desk *d, int w, int h);
 
 int desk_find(const struct desk *d, unsigned int id);
+void desk_set_fixed(struct desk *d, int index, const struct fixed_canvas *c);
+int desk_pin(struct desk *d, int index, int prog, unsigned int id);
+
 unsigned int desk_focused(const struct desk *d);
 
 int desk_open(struct desk *d, unsigned int id, char type);
