@@ -11,6 +11,7 @@ Compositor of Tundra OS, on wlroots. Its design is in ADR-036 of
 
 ```
 tundra-borealis
+tundra-borealis screens [mirror | extended]
 tundra-borealis --version
 ```
 
@@ -32,6 +33,17 @@ h = frost
 ```
 
 A wrong file is reported and ignored.
+
+`$XDG_CONFIG_HOME/tundra/borealis/screens` says how two screens start:
+
+```
+mode = extended
+second = left
+```
+
+`mirror` shows the same canvas on both; `right` puts the second screen on the
+right. `tundra-borealis screens` changes the mode of the running borealis, and
+without a mode it prints the current one.
 
 ### Fixed canvases
 

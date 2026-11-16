@@ -7,6 +7,7 @@
 #include "desk.h"
 #include "keys.h"
 #include "prefs.h"
+#include "screens.h"
 
 struct window;
 
@@ -18,7 +19,7 @@ struct server {
 	struct wlr_output_layout *output_layout;
 	struct wlr_scene *scene;
 	struct wlr_scene_output_layout *scene_layout;
-	struct wlr_scene_rect *background;
+	struct wlr_scene_tree *backgrounds;
 	struct wlr_scene_tree *canvas[DESK_CANVASES];
 	struct wlr_scene_tree *limbo;
 	struct wlr_xdg_shell *xdg_shell;
@@ -58,7 +59,8 @@ struct server {
 	int pointer_locked;
 	uint32_t swipe_fingers;
 	double swipe_dx, swipe_dy;
-	int out_w, out_h;
+	struct screens_conf screens;
+	int mirror;
 	int stopping;
 };
 

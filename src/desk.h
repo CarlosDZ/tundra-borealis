@@ -14,7 +14,7 @@ struct desk {
 	unsigned int fullscreen[DESK_CANVASES];
 	const struct fixed_canvas *fixed[DESK_CANVASES];
 	unsigned int pinned[DESK_CANVASES][FIXED_MAX];
-	int w, h;
+	int w, h, w2, h2;
 };
 
 int desk_index(struct grid_pos p);
@@ -22,6 +22,8 @@ struct grid_pos desk_pos(int index);
 
 void desk_init(struct desk *d, int w, int h);
 void desk_resize(struct desk *d, int w, int h);
+void desk_resize_second(struct desk *d, int w, int h);
+void desk_canvas_size(const struct desk *d, int index, int *w, int *h);
 
 int desk_find(const struct desk *d, unsigned int id);
 void desk_set_fixed(struct desk *d, int index, const struct fixed_canvas *c);

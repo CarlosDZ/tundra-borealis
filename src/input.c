@@ -15,6 +15,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "input.h"
+#include "outputs.h"
 #include "spawn.h"
 #include "xdg.h"
 
@@ -59,6 +60,14 @@ struct window *input_window_at(struct server *s, double lx, double ly,
 static void pointer_update(struct server *s, uint32_t time, int follow) {
 	struct wlr_surface *surface;
 	double sx, sy;
+	if (follow) {
+		int screen = outputs_screen_at(s, s->cursor->x, s->cursor->y);
+		if (screen >= 0 && screen != grid_focused_screen(&s->desk.grid) &&
+		    grid_other_screen(&s->desk.grid) == 0) {
+			server_arrange_all(s);
+			input_focus(s, 0);
+		}
+	}
 	struct window *w = xdg_root(
 	    input_window_at(s, s->cursor->x, s->cursor->y, &surface, &sx, &sy));
 	if (follow && w && w->id != desk_focused(&s->desk) &&
@@ -88,6 +97,12 @@ void input_focus(struct server *s, int warp) {
 	s->active = w;
 	if (!w) {
 		wlr_seat_keyboard_notify_clear_focus(s->seat);
+		if (warp) {
+			struct wlr_box box;
+			outputs_canvas_box(s, desk_index(s->desk.grid.focus), &box);
+			wlr_cursor_warp(s->cursor, NULL, box.x + box.width / 2.0,
+			                box.y + box.height / 2.0);
+		}
 		pointer_update(s, now_msec(), 0);
 		return;
 	}
