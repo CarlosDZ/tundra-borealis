@@ -117,6 +117,29 @@ int main(void) {
 	CHECK(ra.x + ra.w == rb.x && rb.x + rb.w == 1000,
 	      "neighbours touch after rounding");
 
+	CHECK(fixed_privilege_of("zwlr_screencopy_manager_v1") == FIXED_CAPTURE &&
+	          fixed_privilege_of("ext_image_copy_capture_manager_v1") ==
+	              FIXED_CAPTURE,
+	      "capturing the screen needs capture");
+	CHECK(fixed_privilege_of("zwp_virtual_keyboard_manager_v1") ==
+	              FIXED_VIRTUAL_INPUT &&
+	          fixed_privilege_of("zwlr_virtual_pointer_manager_v1") ==
+	              FIXED_VIRTUAL_INPUT,
+	      "a virtual keyboard or pointer needs virtual-input");
+	CHECK(fixed_privilege_of("zwlr_layer_shell_v1") == FIXED_OVERLAY,
+	      "drawing over the rest needs overlay");
+	CHECK(fixed_privilege_of("zwlr_foreign_toplevel_manager_v1") ==
+	              FIXED_WINDOW_CONTROL &&
+	          fixed_privilege_of("ext_foreign_toplevel_list_v1") ==
+	              FIXED_WINDOW_CONTROL,
+	      "seeing other windows needs window-control");
+	CHECK(fixed_privilege_of("ext_session_lock_manager_v1") == FIXED_LOCK,
+	      "locking the session needs lock");
+	CHECK(fixed_privilege_of("wl_compositor") == 0 &&
+	          fixed_privilege_of("xdg_wm_base") == 0 &&
+	          fixed_privilege_of("wl_seat") == 0,
+	      "the rest is for every client");
+
 	struct fixed_deaths d = {0};
 	CHECK(fixed_died(&d, 1000) == 1 && fixed_died(&d, 2000) == 1,
 	      "the first two deaths restart it");

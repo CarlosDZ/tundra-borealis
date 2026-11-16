@@ -1,6 +1,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -192,4 +193,19 @@ struct fixed_run *clients_run_of(struct server *s, struct wl_client *client) {
 			if (s->runs[c][i].client == client)
 				return &s->runs[c][i];
 	return NULL;
+}
+
+static bool visible(const struct wl_client *client,
+                    const struct wl_global *global, void *data) {
+	struct server *s = data;
+	unsigned int need =
+	    fixed_privilege_of(wl_global_get_interface(global)->name);
+	if (!need)
+		return true;
+	struct fixed_run *r = clients_run_of(s, (struct wl_client *)client);
+	return r && (s->fixed[r->canvas].p[r->prog].privileges & need) == need;
+}
+
+void clients_filter_globals(struct server *s) {
+	wl_display_set_global_filter(s->display, visible, s);
 }

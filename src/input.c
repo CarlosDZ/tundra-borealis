@@ -9,6 +9,8 @@
 #include <wlr/types/wlr_pointer_gestures_v1.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_virtual_keyboard_v1.h>
+#include <wlr/types/wlr_virtual_pointer_v1.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <xkbcommon/xkbcommon.h>
 
@@ -258,21 +260,24 @@ static void add_keyboard(struct server *s, struct wlr_keyboard *wlr) {
 		perror("calloc error");
 		return;
 	}
-	struct xkb_rule_names names = {.options = "caps:escape"};
-	struct xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-	struct xkb_keymap *map = ctx ? xkb_keymap_new_from_names(
-	                                   ctx, &names, XKB_KEYMAP_COMPILE_NO_FLAGS)
-	                             : NULL;
-	if (!map || !wlr_keyboard_set_keymap(wlr, map)) {
-		fprintf(stderr, "%s: cannot set the keymap\n", wlr->base.name);
+	/* A virtual keyboard brings the keymap of the client that drives it */
+	if (!wlr_input_device_get_virtual_keyboard(&wlr->base)) {
+		struct xkb_rule_names names = {.options = "caps:escape"};
+		struct xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+		struct xkb_keymap *map =
+		    ctx ? xkb_keymap_new_from_names(ctx, &names,
+		                                    XKB_KEYMAP_COMPILE_NO_FLAGS)
+		        : NULL;
+		int ok = map && wlr_keyboard_set_keymap(wlr, map);
 		xkb_keymap_unref(map);
 		xkb_context_unref(ctx);
-		free(k);
-		return;
+		if (!ok) {
+			fprintf(stderr, "%s: cannot set the keymap\n", wlr->base.name);
+			free(k);
+			return;
+		}
+		wlr_keyboard_set_repeat_info(wlr, REPEAT_RATE, REPEAT_DELAY);
 	}
-	xkb_keymap_unref(map);
-	xkb_context_unref(ctx);
-	wlr_keyboard_set_repeat_info(wlr, REPEAT_RATE, REPEAT_DELAY);
 
 	k->server = s;
 	k->wlr = wlr;
@@ -303,6 +308,18 @@ void input_add_device(struct server *s, struct wlr_input_device *dev) {
 static void new_input(struct wl_listener *listener, void *data) {
 	struct server *s = wl_container_of(listener, s, new_input);
 	input_add_device(s, data);
+}
+
+static void new_virtual_keyboard(struct wl_listener *listener, void *data) {
+	struct server *s = wl_container_of(listener, s, new_virtual_keyboard);
+	struct wlr_virtual_keyboard_v1 *vk = data;
+	input_add_device(s, &vk->keyboard.base);
+}
+
+static void new_virtual_pointer(struct wl_listener *listener, void *data) {
+	struct server *s = wl_container_of(listener, s, new_virtual_pointer);
+	struct wlr_virtual_pointer_v1_new_pointer_event *e = data;
+	input_add_device(s, &e->new_pointer->pointer.base);
 }
 
 static void cursor_motion(struct wl_listener *listener, void *data) {
@@ -454,7 +471,10 @@ int input_init(struct server *s) {
 	s->cursor = wlr_cursor_create();
 	s->cursor_mgr = wlr_xcursor_manager_create(NULL, CURSOR_SIZE);
 	s->gestures = wlr_pointer_gestures_v1_create(s->display);
-	if (!s->cursor || !s->cursor_mgr || !s->gestures)
+	s->virtual_keyboards = wlr_virtual_keyboard_manager_v1_create(s->display);
+	s->virtual_pointers = wlr_virtual_pointer_manager_v1_create(s->display);
+	if (!s->cursor || !s->cursor_mgr || !s->gestures || !s->virtual_keyboards ||
+	    !s->virtual_pointers)
 		return -1;
 	wlr_cursor_attach_output_layout(s->cursor, s->output_layout);
 
@@ -475,6 +495,10 @@ int input_init(struct server *s) {
 	LISTEN(s->cursor->events.hold_end, hold_end, hold_end);
 	LISTEN(s->seat->events.request_set_cursor, request_set_cursor,
 	       request_set_cursor);
+	LISTEN(s->virtual_keyboards->events.new_virtual_keyboard,
+	       new_virtual_keyboard, new_virtual_keyboard);
+	LISTEN(s->virtual_pointers->events.new_virtual_pointer, new_virtual_pointer,
+	       new_virtual_pointer);
 	s->input_ready = 1;
 	update_caps(s);
 	return 0;
@@ -497,6 +521,8 @@ void input_finish(struct server *s) {
 		wl_list_remove(&s->hold_begin.link);
 		wl_list_remove(&s->hold_end.link);
 		wl_list_remove(&s->request_set_cursor.link);
+		wl_list_remove(&s->new_virtual_keyboard.link);
+		wl_list_remove(&s->new_virtual_pointer.link);
 		s->input_ready = 0;
 	}
 	if (s->cursor_mgr)

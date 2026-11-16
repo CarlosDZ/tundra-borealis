@@ -27,4 +27,8 @@ void clients_finish(struct server *s);
 /* The program a client runs, or NULL for any other client. */
 struct fixed_run *clients_run_of(struct server *s, struct wl_client *client);
 
+/* From now on a client sees a privileged global only if it is the program of
+ * a fixed canvas given that privilege. */
+void clients_filter_globals(struct server *s);
+
 #endif

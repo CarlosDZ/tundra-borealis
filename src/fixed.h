@@ -48,6 +48,10 @@ int fixed_parse(const char *text, size_t len, struct fixed_canvas *c,
 
 struct layout_rect fixed_rect(const struct fixed_prog *p, int w, int h);
 
+/* The privileges a client needs to see a global of that interface; 0 for one
+ * every client sees. */
+unsigned int fixed_privilege_of(const char *interface);
+
 /* p died at now, in milliseconds: 1 to start it again, 0 once it died
  * FIXED_DEATHS times within FIXED_DEATH_SPAN_MS and its place is covered. */
 int fixed_died(struct fixed_deaths *d, uint64_t now);

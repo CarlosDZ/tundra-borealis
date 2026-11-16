@@ -207,6 +207,29 @@ int fixed_parse(const char *text, size_t len, struct fixed_canvas *c,
 	return 0;
 }
 
+static const struct {
+	const char *interface;
+	unsigned int privilege;
+} gated[] = {
+    {"zwlr_layer_shell_v1", FIXED_OVERLAY},
+    {"zwlr_screencopy_manager_v1", FIXED_CAPTURE},
+    {"ext_image_copy_capture_manager_v1", FIXED_CAPTURE},
+    {"ext_output_image_capture_source_manager_v1", FIXED_CAPTURE},
+    {"ext_foreign_toplevel_image_capture_source_manager_v1", FIXED_CAPTURE},
+    {"zwp_virtual_keyboard_manager_v1", FIXED_VIRTUAL_INPUT},
+    {"zwlr_virtual_pointer_manager_v1", FIXED_VIRTUAL_INPUT},
+    {"zwlr_foreign_toplevel_manager_v1", FIXED_WINDOW_CONTROL},
+    {"ext_foreign_toplevel_list_v1", FIXED_WINDOW_CONTROL},
+    {"ext_session_lock_manager_v1", FIXED_LOCK},
+};
+
+unsigned int fixed_privilege_of(const char *interface) {
+	for (size_t i = 0; i < sizeof(gated) / sizeof(gated[0]); i++)
+		if (strcmp(gated[i].interface, interface) == 0)
+			return gated[i].privilege;
+	return 0;
+}
+
 struct layout_rect fixed_rect(const struct fixed_prog *p, int w, int h) {
 	struct layout_rect r;
 	r.x = w * p->x / 100;

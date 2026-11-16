@@ -51,9 +51,11 @@ recursos {
 `place` and `size` are whole percents of the canvas. `level` goes from 0 to 9,
 0 by default; a higher one covers what lies under it, and two programs on one
 level cannot overlap. `privileges` is `none` or a comma separated list of
-`overlay`, `capture`, `virtual-input`, `window-control` and `lock`. A program
-that dies is started again; after three deaths within 10 s its place is
-covered. A canvas whose file is wrong stays a working one, and at least one of
+`overlay`, `capture`, `virtual-input`, `window-control` and `lock`. Only the program
+started from the file gets its privileges, not the ones it starts in turn: any
+other client never sees the screen capture, virtual keyboard and pointer, or the
+other privileged globals. A program that dies is started again; after three
+deaths within 10 s its place is covered. A canvas whose file is wrong stays a working one, and at least one of
 the 16 always does.
 
 ## Tests
