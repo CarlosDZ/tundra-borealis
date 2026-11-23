@@ -25,4 +25,9 @@ struct head_layout {
 void head_layout(int w, int line, int place_w, int clock_w,
                  struct head_layout *l);
 
+int head_icon_scale(int line, int side);
+
+void head_indicators(int w, int line, int n, const int *icon_w,
+                     const int *num_w, int *icon_x, int *num_x);
+
 #endif

@@ -123,6 +123,28 @@ static int ink(struct server *s, int x, int w) {
 	return n;
 }
 
+static int count(struct server *s, uint32_t argb) {
+	struct header *h = outputs_header(s, outputs_main(s));
+	struct header_info i;
+	int n = 0;
+	if (!h)
+		return -1;
+	header_info(h, &i);
+	for (int y = 0; y < i.h; y++)
+		for (int x = 0; x < i.w; x++)
+			n += header_pixel(h, x, y) == argb;
+	return n;
+}
+
+static void show_status(struct server *s, FILE *f) {
+	const struct status *st = &s->status;
+	fprintf(f, "status battery %d %s %d brightness %d %s %d\n",
+	        st->power.battery, st->battery_state ? st->battery_state : "-",
+	        st->battery.art != NULL, st->power.brightness,
+	        st->brightness_state ? st->brightness_state : "-",
+	        st->brightness.art != NULL);
+}
+
 static void find_headless(struct wlr_backend *b, void *data) {
 	if (wlr_backend_is_headless(b))
 		*(struct wlr_backend **)data = b;
@@ -284,6 +306,19 @@ static int run(struct server *s, const char *line, FILE *f) {
 	if (strcmp(line, "header") == 0) {
 		show_header(s, f, "main", outputs_main(s));
 		show_header(s, f, "second", outputs_second(s));
+		return 0;
+	}
+	unsigned int argb;
+	if (sscanf(line, "count %x", &argb) == 1) {
+		fprintf(f, "count %d\n", count(s, argb));
+		return 0;
+	}
+	if (strcmp(line, "status") == 0) {
+		show_status(s, f);
+		return 0;
+	}
+	if (strcmp(line, "uevent") == 0) {
+		status_update(s);
 		return 0;
 	}
 	if (strcmp(line, "colors") == 0) {

@@ -176,6 +176,7 @@ int server_run(void) {
 	wl_list_init(&s.keyboards);
 	wl_list_init(&s.headers);
 	s.minute_fd = -1;
+	s.status.uevent_fd = -1;
 	desk_init(&s.desk, 0, 0);
 	load_config(&s);
 	clients_load(&s);
@@ -231,7 +232,7 @@ int server_run(void) {
 		goto out;
 	}
 	wlr_scene_node_set_enabled(&s.limbo->node, false);
-	if (header_init(&s) < 0)
+	if (header_init(&s) < 0 || status_init(&s) < 0)
 		goto out;
 
 	s.seat = wlr_seat_create(s.display, "seat0");
@@ -287,6 +288,7 @@ out:
 	control_finish();
 	clients_finish(&s);
 	testsock_finish();
+	status_finish(&s);
 	header_finish(&s);
 	if (sigterm)
 		wl_event_source_remove(sigterm);

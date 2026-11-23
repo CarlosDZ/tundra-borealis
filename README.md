@@ -59,8 +59,23 @@ window covers it. Its colors, and those of the borders and backgrounds, come
 from the theme of libdraw, `/etc/tundra/theme` and `~/.config/tundra/theme`,
 each one as `borealis.name` and then `name`; a theme saved is painted at once.
 
-Still to come: battery, brightness, volume and lid in the header, the pixel
-art of empty places, the lid, locking, notices and captures.
+On the right, the battery and the brightness, each its icon and its number,
+read from `/sys` when the kernel says that something changed there, and each
+minute for batteries that do not; a computer without one shows nothing. Each
+icon is a drawing of the toa format with an animation for each state:
+
+| Drawing | States |
+|---------|--------|
+| `battery` | `empty` up to 15 %, `low` to 35, `half` to 60, `high` to 85, `full`; `charging` |
+| `brightness` | `low` up to 25 %, `half` to 50, `high` to 75, `full` |
+
+They are installed in `/usr/share/tundra/borealis/art`, built from
+`data/art/*.toas` by the `toa` command of tundra-libtoa; one of the same name
+in `~/.config/tundra/borealis/art` goes instead. A drawing missing or broken
+leaves its place empty and says why.
+
+Still to come: volume and lid in the header, the pixel art of empty places,
+the lid, locking, notices and captures.
 
 ## Configuration
 

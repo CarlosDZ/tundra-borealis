@@ -1,0 +1,105 @@
+# The brightness of the header (DR-181): a moon that waxes from the left,
+# an animation of one frame for each quarter.
+
+size = 12 12
+
+palette {
+	. = clear
+	t = text ccd2d6
+	d = border 3e494f
+}
+
+base {
+	row = ............
+	row = ....tttt....
+	row = ...tttttt...
+	row = ..tttttttt..
+	row = .tttttttttt.
+	row = .tttttttttt.
+	row = .tttttttttt.
+	row = .tttttttttt.
+	row = ..tttttttt..
+	row = ...tttttt...
+	row = ....tttt....
+	row = ............
+}
+
+anim {
+	name = low
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ....tddd....
+	row = ...tddddd...
+	row = ..ttdddddd..
+	row = .ttdddddddd.
+	row = .ttdddddddd.
+	row = .ttdddddddd.
+	row = .ttdddddddd.
+	row = ..ttdddddd..
+	row = ...tddddd...
+	row = ....tddd....
+	row = ............
+}
+
+anim {
+	name = half
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ....ttdd....
+	row = ...tttddd...
+	row = ..ttttdddd..
+	row = .tttttddddd.
+	row = .tttttddddd.
+	row = .tttttddddd.
+	row = .tttttddddd.
+	row = ..ttttdddd..
+	row = ...tttddd...
+	row = ....ttdd....
+	row = ............
+}
+
+anim {
+	name = high
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ....tttd....
+	row = ...ttttdd...
+	row = ..ttttttdd..
+	row = .tttttttddd.
+	row = .tttttttddd.
+	row = .tttttttddd.
+	row = .tttttttddd.
+	row = ..ttttttdd..
+	row = ...ttttdd...
+	row = ....tttd....
+	row = ............
+}
+
+anim {
+	name = full
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ....tttt....
+	row = ...tttttt...
+	row = ..tttttttt..
+	row = .tttttttttt.
+	row = .tttttttttt.
+	row = .tttttttttt.
+	row = .tttttttttt.
+	row = ..tttttttt..
+	row = ...tttttt...
+	row = ....tttt....
+	row = ............
+}

@@ -36,3 +36,18 @@ void head_layout(int w, int line, int place_w, int clock_w,
 		l->clock_x = after;
 	l->y = head_pad(line);
 }
+
+int head_icon_scale(int line, int side) {
+	int s = side > 0 ? line / side : 1;
+	return s < 1 ? 1 : s;
+}
+
+void head_indicators(int w, int line, int n, const int *icon_w,
+                     const int *num_w, int *icon_x, int *num_x) {
+	int x = w - line / 2;
+	for (int i = n - 1; i >= 0; i--) {
+		num_x[i] = x - num_w[i];
+		icon_x[i] = num_x[i] - line / 4 - icon_w[i];
+		x = icon_x[i] - line;
+	}
+}

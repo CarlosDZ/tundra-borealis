@@ -31,6 +31,8 @@ struct header {
 	int stale;
 	char place[HEAD_TEXT], clock[HEAD_TEXT];
 	uint32_t surface, accent, text;
+	int battery, brightness;
+	unsigned int drawn;
 };
 
 static void hbuf_destroy(struct wlr_buffer *base) {
@@ -95,6 +97,40 @@ static struct hbuf *spare(struct header *h) {
 	return b;
 }
 
+static void paint_status(struct header *h, struct tdraw_canvas *c) {
+	struct server *s = h->server;
+	const struct status *st = &s->status;
+	struct tdraw_art *art[2];
+	char num[2][8];
+	int value[2] = {st->power.battery, st->power.brightness}, n = 0;
+	int scale[2], aw[2], ah[2], iw[2], nw[2], ix[2], nx[2];
+	struct tdraw_art *all[2] = {st->battery.art, st->brightness.art};
+	for (int i = 0; i < 2; i++) {
+		if (value[i] < 0)
+			continue;
+		art[n] = all[i];
+		aw[n] = ah[n] = 0;
+		if (art[n])
+			tdraw_art_size(art[n], &aw[n], &ah[n]);
+		scale[n] = head_icon_scale(h->line, ah[n]);
+		iw[n] = art[n] ? aw[n] * scale[n] : h->line;
+		snprintf(num[n], sizeof(num[n]), "%d %%", value[i]);
+		nw[n] = h->font ? tdraw_text_width(h->font, num[n], strlen(num[n])) : 0;
+		if (nw[n] < 0)
+			nw[n] = 0;
+		n++;
+	}
+	head_indicators(h->w, h->line, n, iw, nw, ix, nx);
+	for (int i = 0; i < n; i++) {
+		if (art[i])
+			tdraw_art(c, art[i], ix[i], (h->height - ah[i] * scale[i]) / 2,
+			          scale[i], 0);
+		if (h->font)
+			tdraw_text(c, h->font, nx[i], head_pad(h->line), num[i],
+			           strlen(num[i]), s->colors.text);
+	}
+}
+
 static void paint(struct header *h, const char *place) {
 	struct server *s = h->server;
 	const struct colors *c = &s->colors;
@@ -111,12 +147,16 @@ static void paint(struct header *h, const char *place) {
 		tdraw_text(b->canvas, h->font, l.place_x, l.y, place, pl, c->accent);
 		tdraw_text(b->canvas, h->font, l.clock_x, l.y, s->clock, cl, c->text);
 	}
+	paint_status(h, b->canvas);
 	wlr_scene_buffer_set_buffer(h->node, &b->base);
 	snprintf(h->place, sizeof(h->place), "%s", place);
 	snprintf(h->clock, sizeof(h->clock), "%s", s->clock);
 	h->surface = c->surface;
 	h->accent = c->accent;
 	h->text = c->text;
+	h->battery = s->status.power.battery;
+	h->brightness = s->status.power.brightness;
+	h->drawn = s->status.drawn;
 	h->stale = 0;
 }
 
@@ -129,7 +169,10 @@ void header_refresh(struct server *s) {
 		head_place(grid_shown(&s->desk.grid, h->screen), place);
 		if (h->stale || strcmp(place, h->place) || strcmp(s->clock, h->clock) ||
 		    h->surface != s->colors.surface || h->accent != s->colors.accent ||
-		    h->text != s->colors.text)
+		    h->text != s->colors.text ||
+		    h->battery != s->status.power.battery ||
+		    h->brightness != s->status.power.brightness ||
+		    h->drawn != s->status.drawn)
 			paint(h, place);
 	}
 }
@@ -230,7 +273,7 @@ static int on_minute(int fd, uint32_t mask, void *data) {
 		n = 0;
 	tick(s);
 	arm(s);
-	header_refresh(s);
+	status_update(s);
 	return 0;
 }
 
@@ -251,6 +294,7 @@ static int on_theme(int fd, uint32_t mask, void *data) {
 	(void)fd;
 	(void)mask;
 	if (load_theme(s)) {
+		status_theme(s);
 		outputs_recolor(s);
 		server_arrange_all(s);
 	}

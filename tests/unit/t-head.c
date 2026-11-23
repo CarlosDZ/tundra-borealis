@@ -29,5 +29,15 @@ int main(void) {
 	      "the place half a line from the left, the clock centred");
 	head_layout(200, 24, 60, 204, &l);
 	CHECK(l.clock_x == 84, "on a narrow screen the clock goes after the place");
+	CHECK(head_icon_scale(24, 12) == 2 && head_icon_scale(16, 12) == 1 &&
+	          head_icon_scale(48, 12) == 4 && head_icon_scale(10, 12) == 1 &&
+	          head_icon_scale(24, 0) == 1,
+	      "an icon at the whole scale that fits the line");
+	{
+		int iw[2] = {24, 24}, nw[2] = {48, 36}, ix[2], nx[2];
+		head_indicators(1920, 24, 2, iw, nw, ix, nx);
+		CHECK(nx[1] == 1872 && ix[1] == 1842 && nx[0] == 1770 && ix[0] == 1740,
+		      "the indicators from the right margin, the first leftmost");
+	}
 	return test_summary();
 }

@@ -9,7 +9,8 @@ TUNDRA_BOREALIS_DIR ?= /etc/tundra/borealis
 TUNDRA_STD  = -std=c11
 TUNDRA_DEFS = -D_GNU_SOURCE -DWLR_USE_UNSTABLE \
               -DTUNDRA_BOREALIS_VERSION=\"$(VERSION)\" \
-              -DTUNDRA_BOREALIS_DIR=\"$(TUNDRA_BOREALIS_DIR)\"
+              -DTUNDRA_BOREALIS_DIR=\"$(TUNDRA_BOREALIS_DIR)\" \
+              -DTUNDRA_BOREALIS_ART=\"$(ART_DIR)\"
 TUNDRA_INC  = -Isrc
 TUNDRA_LIBS = -ltundra-draw -ltundra-conf
 TUNDRA_WL_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(TUNDRA_PKGS))
@@ -29,14 +30,28 @@ CFLAGS ?= -Wall -Wextra -O2
 
 TARGET = tundra-borealis
 
+TOA ?= toa
+ifneq ($(TOA_DEV),)
+TOA = $(TEST_ENV) $(abspath $(TOA_DEV))/build/toa
+endif
+ART_DIR = $(PREFIX)/share/tundra/borealis/art
+
 BUILD = build
 SRCS = $(wildcard src/*.c)
 HDRS = $(wildcard src/*.h)
 OBJS = $(SRCS:src/%.c=$(BUILD)/%.o)
 DEPS = $(OBJS:.o=.d)
 
+ART = $(patsubst data/art/%.toas,$(BUILD)/art/%.toa,$(wildcard data/art/*.toas))
+
+all: $(TARGET) $(ART)
+
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS) $(TUNDRA_LIBS) $(TUNDRA_WL_LIBS)
+
+$(BUILD)/art/%.toa: data/art/%.toas
+	@mkdir -p $(dir $@)
+	$(TOA) build $< -o $@
 
 $(BUILD)/%.o: src/%.c
 	@mkdir -p $(dir $@)
@@ -98,20 +113,24 @@ check-unit: $(UNIT_TESTS)
 	@rc=0; for t in $(UNIT_TESTS); do echo "# $$t"; $(TEST_ENV) $$t || rc=1; done; \
 		exit $$rc
 
-check: check-unit $(TEST_BIN) $(TEST_TOOLS)
+check: check-unit $(TEST_BIN) $(TEST_TOOLS) $(ART)
 	@$(TEST_ENV) sh tests/wl/run.sh
 
 FORCE:
 
-.PHONY: install uninstall clean check check-unit FORCE
+.PHONY: all install uninstall clean check check-unit FORCE
 
 PREFIX ?= /usr
 DESTDIR ?=
 
-install: $(TARGET)
+install: $(TARGET) $(ART)
 	install -Dm755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
+	for f in $(ART); do \
+		install -Dm644 $$f $(DESTDIR)$(ART_DIR)/$${f##*/} || exit 1; \
+	done
 	install -Dm644 LICENSE $(DESTDIR)$(PREFIX)/share/licenses/$(TARGET)/LICENSE
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	rm -rf $(DESTDIR)$(PREFIX)/share/licenses/$(TARGET)
+	rm -rf $(DESTDIR)$(PREFIX)/share/tundra/borealis

@@ -1,0 +1,147 @@
+# The battery of the header (DR-181): an animation of one frame for each
+# state, so that showing one never wakes borealis up.
+
+size = 12 12
+
+palette {
+	. = clear
+	o = text ccd2d6
+	g = ok 65c55b
+	w = warn d2a408
+	r = alert ff1712
+}
+
+base {
+	row = ............
+	row = ............
+	row = oooooooooo..
+	row = o........o..
+	row = o.gggggg.oo.
+	row = o.gggggg.oo.
+	row = o.gggggg.oo.
+	row = o.gggggg.oo.
+	row = o........o..
+	row = oooooooooo..
+	row = ............
+	row = ............
+}
+
+anim {
+	name = full
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ............
+	row = oooooooooo..
+	row = o........o..
+	row = o.gggggg.oo.
+	row = o.gggggg.oo.
+	row = o.gggggg.oo.
+	row = o.gggggg.oo.
+	row = o........o..
+	row = oooooooooo..
+	row = ............
+	row = ............
+}
+
+anim {
+	name = high
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ............
+	row = oooooooooo..
+	row = o........o..
+	row = o.gggg...oo.
+	row = o.gggg...oo.
+	row = o.gggg...oo.
+	row = o.gggg...oo.
+	row = o........o..
+	row = oooooooooo..
+	row = ............
+	row = ............
+}
+
+anim {
+	name = half
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ............
+	row = oooooooooo..
+	row = o........o..
+	row = o.www....oo.
+	row = o.www....oo.
+	row = o.www....oo.
+	row = o.www....oo.
+	row = o........o..
+	row = oooooooooo..
+	row = ............
+	row = ............
+}
+
+anim {
+	name = low
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ............
+	row = oooooooooo..
+	row = o........o..
+	row = o.ww.....oo.
+	row = o.ww.....oo.
+	row = o.ww.....oo.
+	row = o.ww.....oo.
+	row = o........o..
+	row = oooooooooo..
+	row = ............
+	row = ............
+}
+
+anim {
+	name = empty
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ............
+	row = rrrrrrrrrr..
+	row = r........r..
+	row = r.r......rr.
+	row = r.r......rr.
+	row = r.r......rr.
+	row = r.r......rr.
+	row = r........r..
+	row = rrrrrrrrrr..
+	row = ............
+	row = ............
+}
+
+anim {
+	name = charging
+}
+
+frame {
+	ms = 1000
+	row = ............
+	row = ............
+	row = oooooooooo..
+	row = o....gg..o..
+	row = o...gg...oo.
+	row = o..ggggg.oo.
+	row = o...ggg..oo.
+	row = o..gg....oo.
+	row = o..g.....o..
+	row = oooooooooo..
+	row = ............
+	row = ............
+}
