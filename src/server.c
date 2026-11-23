@@ -21,6 +21,7 @@
 #include <wlr/util/log.h>
 
 #include "control.h"
+#include "header.h"
 #include "input.h"
 #include "outputs.h"
 #include "server.h"
@@ -30,16 +31,16 @@
 #define COMPOSITOR_VERSION 6
 #define USER_FILE_MAX 65536
 
-static const float cover_color[4] = {0.35f, 0.12f, 0.12f, 1.0f};
-
-static void arrange_fixed(struct server *s, int index) {
+static void arrange_fixed(struct server *s, int index, int top) {
 	const struct fixed_canvas *fc = s->desk.fixed[index];
+	float fallen[4];
+	colors_rgba(s->colors.fallen, fallen);
 	for (int i = 0; i < fc->n; i++) {
 		struct fixed_run *r = &s->runs[index][i];
 		int cw, ch;
 		desk_canvas_size(&s->desk, index, &cw, &ch);
 		struct layout_rect lr = fixed_rect(&fc->p[i], cw, ch);
-		struct wlr_box b = {lr.x, lr.y, lr.w, lr.h};
+		struct wlr_box b = {lr.x, top + lr.y, lr.w, lr.h};
 		unsigned int id = s->desk.pinned[index][i];
 		struct window *w = id ? xdg_window(s, id) : NULL;
 		if (w && id != s->desk.fullscreen[index]) {
@@ -52,10 +53,10 @@ static void arrange_fixed(struct server *s, int index) {
 			continue;
 		}
 		if (!r->cover)
-			r->cover =
-			    wlr_scene_rect_create(s->canvas[index], 0, 0, cover_color);
+			r->cover = wlr_scene_rect_create(s->canvas[index], 0, 0, fallen);
 		if (!r->cover)
 			continue;
+		wlr_scene_rect_set_color(r->cover, fallen);
 		wlr_scene_node_set_position(&r->cover->node, b.x + XDG_GAP,
 		                            b.y + XDG_GAP);
 		wlr_scene_rect_set_size(r->cover, b.width - XDG_GAP,
@@ -66,8 +67,9 @@ static void arrange_fixed(struct server *s, int index) {
 }
 
 void server_arrange(struct server *s, int index) {
+	int top = outputs_canvas_top(s, index);
 	if (s->desk.fixed[index]) {
-		arrange_fixed(s, index);
+		arrange_fixed(s, index, top);
 	} else {
 		struct slots_place p[LAYOUT_MAX];
 		struct layout l;
@@ -76,7 +78,7 @@ void server_arrange(struct server *s, int index) {
 			struct window *w = xdg_window(s, p[i].id);
 			if (!w || p[i].id == s->desk.fullscreen[index])
 				continue;
-			struct wlr_box r = {p[i].r.x, p[i].r.y, p[i].r.w, p[i].r.h};
+			struct wlr_box r = {p[i].r.x, top + p[i].r.y, p[i].r.w, p[i].r.h};
 			xdg_place(w, index, r, p[i].id == s->desk.focus[index]);
 		}
 	}
@@ -93,6 +95,7 @@ void server_arrange(struct server *s, int index) {
 		wlr_scene_node_set_enabled(&s->canvas[c]->node,
 		                           grid_is_shown(&s->desk.grid, desk_pos(c)));
 	}
+	header_refresh(s);
 }
 
 void server_canvas_origin(struct server *s, int index, int *x, int *y) {
@@ -171,6 +174,8 @@ int server_run(void) {
 	wl_list_init(&s.new_popup.link);
 	wl_list_init(&s.new_decoration.link);
 	wl_list_init(&s.keyboards);
+	wl_list_init(&s.headers);
+	s.minute_fd = -1;
 	desk_init(&s.desk, 0, 0);
 	load_config(&s);
 	clients_load(&s);
@@ -216,15 +221,18 @@ int server_run(void) {
 	}
 	s.scene_layout = wlr_scene_attach_output_layout(s.scene, s.output_layout);
 	s.backgrounds = wlr_scene_tree_create(&s.scene->tree);
+	s.header_tree = wlr_scene_tree_create(&s.scene->tree);
 	for (int c = 0; c < DESK_CANVASES; c++)
 		s.canvas[c] = wlr_scene_tree_create(&s.scene->tree);
 	s.limbo = wlr_scene_tree_create(&s.scene->tree);
-	if (!s.scene_layout || !s.backgrounds || !s.canvas[DESK_CANVASES - 1] ||
-	    !s.limbo) {
+	if (!s.scene_layout || !s.backgrounds || !s.header_tree ||
+	    !s.canvas[DESK_CANVASES - 1] || !s.limbo) {
 		fprintf(stderr, "cannot create the scene\n");
 		goto out;
 	}
 	wlr_scene_node_set_enabled(&s.limbo->node, false);
+	if (header_init(&s) < 0)
+		goto out;
 
 	s.seat = wlr_seat_create(s.display, "seat0");
 	if (!s.seat) {
@@ -279,6 +287,7 @@ out:
 	control_finish();
 	clients_finish(&s);
 	testsock_finish();
+	header_finish(&s);
 	if (sigterm)
 		wl_event_source_remove(sigterm);
 	if (sigint)

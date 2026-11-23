@@ -6,8 +6,9 @@ Compositor of Tundra OS, on wlroots. Its design is in ADR-036 of
 ## Requirements
 
 - wlroots 0.20, wayland, xkbcommon, libinput and pixman.
-- tundra-libconf. A checkout of tundra-libconf next to this one, built, is used
-  instead of an installed one.
+- tundra-libconf, and tundra-libdraw, which paints the header and reads the
+  theme and the fonts. Built checkouts of tundra-libconf, tundra-libdraw and
+  tundra-libtoa next to this one are used instead of installed ones.
 
 ## Usage
 
@@ -49,8 +50,17 @@ layout:
 The focus follows the pointer. Three fingers swipe from canvas to canvas: up is
 the next depth. Neither axis wraps around.
 
-Still to come: the header, the pixel art of empty places, the lid, locking,
-notices and captures.
+Each screen has a header on top: the place on the left (`H2 P3`, second
+across and third deep), the date and time in the middle (`2026-11-23  14:05`),
+repainted as each minute starts. Its line is the largest size the `ui` fonts of
+`/etc/tundra/fonts` draw to the pixel within 1/45 of the screen's height (24 at
+1080 pixels, 48 at 2160), with a sixth of it above and below. A fullscreen
+window covers it. Its colors, and those of the borders and backgrounds, come
+from the theme of libdraw, `/etc/tundra/theme` and `~/.config/tundra/theme`,
+each one as `borealis.name` and then `name`; a theme saved is painted at once.
+
+Still to come: battery, brightness, volume and lid in the header, the pixel
+art of empty places, the lid, locking, notices and captures.
 
 ## Configuration
 

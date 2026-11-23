@@ -4,11 +4,14 @@
 #include <wayland-server-core.h>
 
 #include "clients.h"
+#include "colors.h"
 #include "desk.h"
+#include "head.h"
 #include "keys.h"
 #include "prefs.h"
 #include "screens.h"
 
+struct tdraw_theme;
 struct window;
 
 struct server {
@@ -20,6 +23,7 @@ struct server {
 	struct wlr_scene *scene;
 	struct wlr_scene_output_layout *scene_layout;
 	struct wlr_scene_tree *backgrounds;
+	struct wlr_scene_tree *header_tree;
 	struct wlr_scene_tree *canvas[DESK_CANVASES];
 	struct wlr_scene_tree *limbo;
 	struct wlr_xdg_shell *xdg_shell;
@@ -35,6 +39,7 @@ struct server {
 	struct wl_list outputs;
 	struct wl_list windows;
 	struct wl_list popups;
+	struct wl_list headers;
 	struct wl_listener new_output;
 	struct wl_listener new_toplevel;
 	struct wl_listener new_popup;
@@ -62,6 +67,12 @@ struct server {
 	struct screens_conf screens;
 	int mirror;
 	int stopping;
+
+	struct tdraw_theme *theme;
+	struct colors colors;
+	struct wl_event_source *theme_source, *minute_source;
+	int minute_fd;
+	char clock[HEAD_TEXT];
 };
 
 int server_run(void);

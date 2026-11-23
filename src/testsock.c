@@ -17,6 +17,7 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_scene.h>
 
+#include "header.h"
 #include "input.h"
 #include "outputs.h"
 #include "testsock.h"
@@ -85,6 +86,41 @@ static void show_screens(struct server *s, FILE *f) {
 	show_output(s, f, "main", outputs_main(s));
 	show_output(s, f, "second", outputs_second(s));
 	fprintf(f, "\n");
+}
+
+static void show_header(struct server *s, FILE *f, const char *role,
+                        struct wlr_output *o) {
+	struct header *h = o ? outputs_header(s, o) : NULL;
+	struct header_info i;
+	if (!h)
+		return;
+	header_info(h, &i);
+	fprintf(f, "header %s %d %d %d %d %d %d %d\t%s\t%s\n", role, i.x, i.y, i.w,
+	        i.h, i.line, i.shown, i.font, i.place, i.clock);
+}
+
+static void show_colors(struct server *s, FILE *f) {
+	const struct colors *c = &s->colors;
+	fprintf(f,
+	        "colors background %08x surface %08x text %08x dim %08x border "
+	        "%08x focus %08x accent %08x alert %08x warn %08x ok %08x fallen "
+	        "%08x\n",
+	        c->background, c->surface, c->text, c->dim, c->border, c->focus,
+	        c->accent, c->alert, c->warn, c->ok, c->fallen);
+}
+
+static int ink(struct server *s, int x, int w) {
+	struct header *h = outputs_header(s, outputs_main(s));
+	struct header_info i;
+	int n = 0;
+	if (!h)
+		return -1;
+	header_info(h, &i);
+	uint32_t back = header_pixel(h, 0, 0);
+	for (int y = 0; y < i.h; y++)
+		for (int c = x; c < x + w && c < i.w; c++)
+			n += header_pixel(h, c, y) != back;
+	return n;
 }
 
 static void find_headless(struct wlr_backend *b, void *data) {
@@ -243,6 +279,25 @@ static int run(struct server *s, const char *line, FILE *f) {
 	}
 	if (strcmp(line, "focus") == 0) {
 		show_focus(s, f);
+		return 0;
+	}
+	if (strcmp(line, "header") == 0) {
+		show_header(s, f, "main", outputs_main(s));
+		show_header(s, f, "second", outputs_second(s));
+		return 0;
+	}
+	if (strcmp(line, "colors") == 0) {
+		show_colors(s, f);
+		return 0;
+	}
+	if (sscanf(line, "ink %lf %lf", &x, &y) == 2) {
+		fprintf(f, "ink %d\n", ink(s, (int)x, (int)y));
+		return 0;
+	}
+	if (sscanf(line, "pixel %lf %lf", &x, &y) == 2) {
+		fprintf(
+		    f, "pixel %08x\n",
+		    header_pixel(outputs_header(s, outputs_main(s)), (int)x, (int)y));
 		return 0;
 	}
 	if (strcmp(line, "pointer") == 0) {

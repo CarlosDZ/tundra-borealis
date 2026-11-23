@@ -11,17 +11,19 @@ TUNDRA_DEFS = -D_GNU_SOURCE -DWLR_USE_UNSTABLE \
               -DTUNDRA_BOREALIS_VERSION=\"$(VERSION)\" \
               -DTUNDRA_BOREALIS_DIR=\"$(TUNDRA_BOREALIS_DIR)\"
 TUNDRA_INC  = -Isrc
-TUNDRA_LIBS = -ltundra-conf
+TUNDRA_LIBS = -ltundra-draw -ltundra-conf
 TUNDRA_WL_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(TUNDRA_PKGS))
 TUNDRA_WL_LIBS   = $(shell $(PKG_CONFIG) --libs $(TUNDRA_PKGS))
 
 CONF_DEV ?= $(wildcard ../tundra-libconf)
-ifneq ($(CONF_DEV),)
-CONF_BUILD   = $(abspath $(CONF_DEV))/build
-TUNDRA_INC  += -I$(CONF_DEV)/include
-TUNDRA_LIBS := -L$(CONF_BUILD) $(TUNDRA_LIBS)
-TEST_RPATH   = -Wl,-rpath,$(CONF_BUILD)
-endif
+DRAW_DEV ?= $(wildcard ../tundra-libdraw)
+TOA_DEV ?= $(wildcard ../tundra-libtoa)
+DEV_BUILDS   = $(foreach d,$(CONF_DEV) $(DRAW_DEV) $(TOA_DEV),$(abspath $(d))/build)
+TUNDRA_INC  += $(foreach d,$(CONF_DEV) $(DRAW_DEV),-I$(d)/include)
+TUNDRA_LIBS := $(DEV_BUILDS:%=-L%) $(TUNDRA_LIBS)
+TEST_RPATH   = $(DEV_BUILDS:%=-Wl,-rpath,%)
+empty :=
+TEST_ENV = $(if $(DEV_BUILDS),LD_LIBRARY_PATH=$(subst $(empty) ,:,$(strip $(DEV_BUILDS))))
 
 CFLAGS ?= -Wall -Wextra -O2
 
@@ -93,10 +95,11 @@ $(TEST_BUILD)/unit/%: tests/unit/%.c tests/unit/test.h $(SRCS) $(HDRS)
 		$(TEST_DEFS) -o $@ $< $(TUNDRA_LIBS) $(TEST_RPATH)
 
 check-unit: $(UNIT_TESTS)
-	@rc=0; for t in $(UNIT_TESTS); do echo "# $$t"; $$t || rc=1; done; exit $$rc
+	@rc=0; for t in $(UNIT_TESTS); do echo "# $$t"; $(TEST_ENV) $$t || rc=1; done; \
+		exit $$rc
 
 check: check-unit $(TEST_BIN) $(TEST_TOOLS)
-	@sh tests/wl/run.sh
+	@$(TEST_ENV) sh tests/wl/run.sh
 
 FORCE:
 

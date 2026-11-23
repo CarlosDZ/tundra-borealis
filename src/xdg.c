@@ -8,8 +8,6 @@
 
 #define XDG_SHELL_VERSION 6
 
-static const float border_color[4] = {0.24f, 0.22f, 0.21f, 1.0f};
-static const float border_focused[4] = {0.51f, 0.65f, 0.60f, 1.0f};
 static const float backdrop[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 struct window *xdg_window(struct server *s, unsigned int id) {
@@ -74,8 +72,10 @@ static void place_dialog(struct window *d) {
 
 	wlr_scene_node_set_position(&d->tree->node, p->surface->node.x + r.x,
 	                            p->surface->node.y + r.y);
+	float focus[4];
+	colors_rgba(d->server->colors.focus, focus);
 	wlr_scene_rect_set_size(d->border, r.w, r.h);
-	wlr_scene_rect_set_color(d->border, border_focused);
+	wlr_scene_rect_set_color(d->border, focus);
 	if ((g.width > iw || g.height > ih) &&
 	    (iw != d->box.width || ih != d->box.height))
 		wlr_xdg_toplevel_set_size(d->toplevel, iw, ih);
@@ -122,9 +122,11 @@ void xdg_place(struct window *w, int index, struct wlr_box r, int focused) {
 		inset(w, XDG_BORDER);
 	}
 	wlr_scene_node_set_position(&w->tree->node, x, y);
+	float border[4];
+	colors_rgba(focused ? w->server->colors.focus : w->server->colors.border,
+	            border);
 	wlr_scene_rect_set_size(w->border, ow, oh);
-	wlr_scene_rect_set_color(w->border,
-	                         focused ? border_focused : border_color);
+	wlr_scene_rect_set_color(w->border, border);
 	if (cw != w->box.width || ch != w->box.height)
 		wlr_xdg_toplevel_set_size(w->toplevel, cw, ch);
 	w->box.x = x + XDG_BORDER;
@@ -366,7 +368,9 @@ static void new_toplevel(struct wl_listener *listener, void *data) {
 		free(w);
 		return;
 	}
-	w->border = wlr_scene_rect_create(w->tree, 0, 0, border_color);
+	float border[4];
+	colors_rgba(s->colors.border, border);
+	w->border = wlr_scene_rect_create(w->tree, 0, 0, border);
 	w->surface = wlr_scene_xdg_surface_create(w->tree, t->base);
 	w->popups = wlr_scene_tree_create(w->tree);
 	if (!w->border || !w->surface || !w->popups) {

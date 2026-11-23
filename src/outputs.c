@@ -6,17 +6,17 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_scene.h>
 
+#include "header.h"
 #include "outputs.h"
 #include "server.h"
 #include "xdg.h"
-
-static const float background_color[4] = {0.09f, 0.10f, 0.12f, 1.0f};
 
 struct output {
 	struct wl_list link;
 	struct server *server;
 	struct wlr_output *wlr_output;
 	struct wlr_scene_rect *background;
+	struct header *header;
 	int in_layout;
 	struct wl_listener frame, request_state, destroy;
 };
@@ -50,7 +50,7 @@ struct wlr_output *outputs_second(struct server *s) {
 	return o ? o->wlr_output : NULL;
 }
 
-static void put(struct server *s, struct output *o, int x, int y) {
+static void put(struct server *s, struct output *o, int x, int y, int screen) {
 	struct wlr_output_layout_output *lo =
 	    wlr_output_layout_add(s->output_layout, o->wlr_output, x, y);
 	if (!o->in_layout && lo) {
@@ -66,6 +66,8 @@ static void put(struct server *s, struct output *o, int x, int y) {
 	wlr_scene_node_set_position(&o->background->node, x, y);
 	wlr_scene_rect_set_size(o->background, w, h);
 	wlr_scene_node_set_enabled(&o->background->node, true);
+	header_place(o->header, x, y, w, h, screen);
+	header_show(o->header, 1);
 }
 
 void outputs_apply(struct server *s) {
@@ -79,6 +81,7 @@ void outputs_apply(struct server *s) {
 		if (o != m && o != sec) {
 			wlr_output_layout_remove(s->output_layout, o->wlr_output);
 			wlr_scene_node_set_enabled(&o->background->node, false);
+			header_show(o->header, 0);
 		}
 	}
 	int mw = 0, mh = 0, sw = 0, sh = 0;
@@ -87,29 +90,57 @@ void outputs_apply(struct server *s) {
 	if (sec)
 		wlr_output_effective_resolution(sec->wlr_output, &sw, &sh);
 	if (m && sec && mode == GRID_EXTENDED && !s->screens.second_right) {
-		put(s, sec, 0, 0);
-		put(s, m, sw, 0);
+		put(s, sec, 0, 0, GRID_SECOND);
+		put(s, m, sw, 0, GRID_MAIN);
 	} else if (m && sec && mode == GRID_EXTENDED) {
-		put(s, m, 0, 0);
-		put(s, sec, mw, 0);
+		put(s, m, 0, 0, GRID_MAIN);
+		put(s, sec, mw, 0, GRID_SECOND);
 	} else {
 		if (m)
-			put(s, m, 0, 0);
+			put(s, m, 0, 0, GRID_MAIN);
 		if (sec)
-			put(s, sec, 0, 0);
+			put(s, sec, 0, 0, GRID_SECOND);
 	}
-	desk_resize(&s->desk, mw - XDG_GAP, mh - XDG_GAP);
-	desk_resize_second(&s->desk, sw - XDG_GAP, sh - XDG_GAP);
+	if (sec && mode == GRID_MIRROR)
+		header_show(sec->header, 0);
+	int hm = m ? header_height(m->header) : 0;
+	int hs = sec ? header_height(sec->header) : 0;
+	desk_resize(&s->desk, mw - XDG_GAP, mh - hm - XDG_GAP);
+	desk_resize_second(&s->desk, sw - XDG_GAP, sh - hs - XDG_GAP);
 	server_arrange_all(s);
 }
 
-void outputs_canvas_box(struct server *s, int index, struct wlr_box *box) {
-	struct wlr_output *o = outputs_main(s);
+static struct output *canvas_output(struct server *s, int index) {
 	if (s->desk.grid.screens == GRID_EXTENDED && desk_pos(index).h % 2)
-		o = outputs_second(s);
+		return find_second(s);
+	return find_main(s);
+}
+
+void outputs_canvas_box(struct server *s, int index, struct wlr_box *box) {
+	struct output *o = canvas_output(s, index);
 	memset(box, 0, sizeof(*box));
 	if (o)
-		wlr_output_layout_get_box(s->output_layout, o, box);
+		wlr_output_layout_get_box(s->output_layout, o->wlr_output, box);
+}
+
+int outputs_canvas_top(struct server *s, int index) {
+	struct output *o = canvas_output(s, index);
+	return o ? header_height(o->header) : 0;
+}
+
+void outputs_recolor(struct server *s) {
+	struct output *o;
+	float c[4];
+	colors_rgba(s->colors.background, c);
+	wl_list_for_each(o, &s->outputs, link)
+	    wlr_scene_rect_set_color(o->background, c);
+}
+
+struct header *outputs_header(struct server *s, struct wlr_output *wo) {
+	struct output *o;
+	wl_list_for_each(o, &s->outputs,
+	                 link) if (o->wlr_output == wo) return o->header;
+	return NULL;
 }
 
 int outputs_screen_at(struct server *s, double x, double y) {
@@ -151,6 +182,7 @@ static void output_destroy(struct wl_listener *listener, void *data) {
 	wl_list_remove(&o->link);
 	if (!s->stopping)
 		wlr_scene_node_destroy(&o->background->node);
+	header_destroy(o->header, s->stopping);
 	free(o);
 	if (!s->stopping)
 		outputs_apply(s);
@@ -182,12 +214,14 @@ static void new_output(struct wl_listener *listener, void *data) {
 		perror("calloc error");
 		return;
 	}
-	o->background =
-	    wlr_scene_rect_create(s->backgrounds, 0, 0, background_color);
+	float background[4];
+	colors_rgba(s->colors.background, background);
+	o->background = wlr_scene_rect_create(s->backgrounds, 0, 0, background);
 	if (!o->background) {
 		free(o);
 		return;
 	}
+	o->header = header_create(s);
 	o->server = s;
 	o->wlr_output = wlr_output;
 	o->frame.notify = output_frame;

@@ -1,4 +1,3 @@
-
 ROOT=$(pwd)
 BOREALIS=$ROOT/build/test/tundra-borealis
 CLIENT=$ROOT/build/test/tools/client
@@ -10,7 +9,8 @@ PID=
 CLIENTS=
 
 export XDG_RUNTIME_DIR=$WORK
-export XDG_CONFIG_HOME=$WORK/config
+export HOME=$WORK/home
+export XDG_CONFIG_HOME=$HOME/.config
 export WAYLAND_DISPLAY=wayland-0
 export WLR_BACKENDS=headless
 export WLR_RENDERER=pixman
