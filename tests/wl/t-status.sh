@@ -2,7 +2,7 @@
 
 BAT=$TUNDRA_BOREALIS_SYS/class/power_supply/BAT0
 LIGHT=$TUNDRA_BOREALIS_SYS/class/backlight/intel_backlight
-mkdir -p "$BAT" "$LIGHT"
+mkdir -p "$BAT" "$LIGHT" "$HOME/.config/tundra"
 printf 'Battery\n' >"$BAT/type"
 printf 'Discharging\n' >"$BAT/status"
 printf '50\n' >"$BAT/energy_now"
@@ -28,7 +28,7 @@ colored() {
 check "battery and brightness are read, each in its state" \
 	[ "$(status)" = "status battery 50 half 1 brightness 40 half 1" ]
 check "their icons and numbers are on the right" \
-	[ "$(ask ink 1000 280 | cut -d' ' -f2)" -gt 0 ]
+	[ "$(ink 1000 280)" -gt 0 ]
 check "half the battery is yellow" colored ffd2a408
 
 printf '10\n' >"$BAT/energy_now"
@@ -44,7 +44,6 @@ printf 'Discharging\n' >"$BAT/status"
 printf '70\n' >"$BAT/energy_now"
 ask uevent >/dev/null
 
-mkdir -p "$HOME/.config/tundra"
 printf 'ok = 0000ff\n' >"$HOME/.config/tundra/theme"
 i=0
 until colored ff0000ff; do
@@ -61,7 +60,7 @@ check "a backlight gone leaves the battery alone" \
 rm -r "$BAT"
 ask uevent >/dev/null
 check "and without either, nothing on the right" \
-	[ "$(ask ink 1000 280 | cut -d' ' -f2)" -eq 0 ]
+	[ "$(ink 1000 280)" -eq 0 ]
 check "stops" stop
 
 mkdir -p "$BAT" "$XDG_CONFIG_HOME/tundra/borealis/art"

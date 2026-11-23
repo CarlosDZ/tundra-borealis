@@ -188,6 +188,14 @@ focused() {
 	ask focus | awk '$1 == "focus" { print $3 }'
 }
 
+pixel() {
+	ask pixel "$1" "$2" | awk '$1 == "pixel" { print $2 }'
+}
+
+ink() {
+	ask ink "$1" "$2" | awk '$1 == "ink" { print $2 }'
+}
+
 canvas() {
 	ask focus | awk '$1 == "focus" { print $4 }'
 }

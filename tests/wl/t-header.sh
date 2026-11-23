@@ -11,7 +11,7 @@ if ! start; then
 fi
 
 header() {
-	ask header | awk -F '\t' -v r="$1" '$1 ~ "^header " r " " { print $' "${2:-1}" ' }'
+	ask header | awk -F '\t' -v r="$1" -v f="${2:-1}" '$1 ~ "^header " r " " { print $f }'
 }
 
 check "a 1280x720 screen has a header 22 high, for a line of 16" \
@@ -34,18 +34,18 @@ check "going to 21 changes the place" [ "$(header main 2)" = "H2 P1" ]
 
 check "without a theme, the colors of Tundra" \
 	[ "$(ask colors | awk '$1 == "colors" { print $5 }')" = ff1f2529 ]
-check "the header is painted in them" [ "$(ask pixel 0 0)" = "pixel ff1f2529" ]
+check "the header is painted in them" [ "$(pixel 0 0)" = ff1f2529 ]
 if [ -e "$FONT" ]; then
-	check "it writes the place on the left" [ "$(ask ink 0 200 | cut -d' ' -f2)" -gt 0 ]
-	check "and the clock in the middle" [ "$(ask ink 540 200 | cut -d' ' -f2)" -gt 0 ]
-	check "and nothing else yet on the right" [ "$(ask ink 1000 280 | cut -d' ' -f2)" -eq 0 ]
+	check "it writes the place on the left" [ "$(ink 0 200)" -gt 0 ]
+	check "and the clock in the middle" [ "$(ink 540 200)" -gt 0 ]
+	check "and nothing else yet on the right" [ "$(ink 1000 280)" -eq 0 ]
 else
 	printf '# no %s: the text is not checked\n' "$FONT"
 fi
 
 themed() {
 	i=0
-	until [ "$(ask pixel 0 0)" = "pixel $1" ]; do
+	until [ "$(pixel 0 0)" = "$1" ]; do
 		i=$((i + 1))
 		[ "$i" -gt 50 ] && return 1
 		sleep 0.1
@@ -58,7 +58,7 @@ printf 'surface = 123456\nborealis.surface = 654321\n' >"$HOME/.config/tundra/th
 check "borealis.surface goes before surface" themed ff654321
 printf 'surface = 1234\n' >"$HOME/.config/tundra/theme"
 sleep 0.3
-check "a broken theme keeps the colors" [ "$(ask pixel 0 0)" = "pixel ff654321" ]
+check "a broken theme keeps the colors" [ "$(pixel 0 0)" = ff654321 ]
 check "and says why" grep -q '^theme: .*theme:1:' "$WORK/borealis.log"
 
 super_digits 1 1

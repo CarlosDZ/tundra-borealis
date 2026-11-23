@@ -101,7 +101,7 @@ static void paint_status(struct header *h, struct tdraw_canvas *c) {
 	struct server *s = h->server;
 	const struct status *st = &s->status;
 	struct tdraw_art *art[2];
-	char num[2][8];
+	char num[2][16];
 	int value[2] = {st->power.battery, st->power.brightness}, n = 0;
 	int scale[2], aw[2], ah[2], iw[2], nw[2], ix[2], nx[2];
 	struct tdraw_art *all[2] = {st->battery.art, st->brightness.art};
