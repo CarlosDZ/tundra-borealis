@@ -15,4 +15,9 @@ struct art {
 void art_load(struct art *a, const char *name, const struct tdraw_theme *t);
 void art_unload(struct art *a);
 
+int art_open(struct art *a, const char *path, const struct tdraw_theme *t);
+
+void art_user_dir(char *buf, unsigned long n);
+const char *art_system_dir(void);
+
 #endif

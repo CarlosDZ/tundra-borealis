@@ -42,7 +42,8 @@ HDRS = $(wildcard src/*.h)
 OBJS = $(SRCS:src/%.c=$(BUILD)/%.o)
 DEPS = $(OBJS:.o=.d)
 
-ART = $(patsubst data/art/%.toas,$(BUILD)/art/%.toa,$(wildcard data/art/*.toas))
+ART = $(patsubst data/art/%.toas,$(BUILD)/art/%.toa,\
+      $(wildcard data/art/*.toas data/art/*/*.toas))
 
 all: $(TARGET) $(ART)
 
@@ -126,7 +127,7 @@ DESTDIR ?=
 install: $(TARGET) $(ART)
 	install -Dm755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	for f in $(ART); do \
-		install -Dm644 $$f $(DESTDIR)$(ART_DIR)/$${f##*/} || exit 1; \
+		install -Dm644 $$f $(DESTDIR)$(ART_DIR)/$${f#$(BUILD)/art/} || exit 1; \
 	done
 	install -Dm644 LICENSE $(DESTDIR)$(PREFIX)/share/licenses/$(TARGET)/LICENSE
 

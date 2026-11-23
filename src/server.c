@@ -21,6 +21,7 @@
 #include <wlr/util/log.h>
 
 #include "control.h"
+#include "fill.h"
 #include "header.h"
 #include "input.h"
 #include "outputs.h"
@@ -50,6 +51,7 @@ static void arrange_fixed(struct server *s, int index, int top) {
 		if (!r->covered) {
 			if (r->cover)
 				wlr_scene_node_set_enabled(&r->cover->node, false);
+			fill_fallen(s, index, i, (struct layout_rect){0}, 0);
 			continue;
 		}
 		if (!r->cover)
@@ -63,17 +65,23 @@ static void arrange_fixed(struct server *s, int index, int top) {
 		                        b.height - XDG_GAP);
 		wlr_scene_node_set_enabled(&r->cover->node, true);
 		wlr_scene_node_raise_to_top(&r->cover->node);
+		fill_fallen(s, index, i,
+		            (struct layout_rect){b.x + XDG_GAP, b.y + XDG_GAP,
+		                                 b.width - XDG_GAP, b.height - XDG_GAP},
+		            1);
 	}
 }
 
 void server_arrange(struct server *s, int index) {
 	int top = outputs_canvas_top(s, index);
 	if (s->desk.fixed[index]) {
+		fill_holes(s, index, NULL, 0, FILL_FREE);
 		arrange_fixed(s, index, top);
 	} else {
 		struct slots_place p[LAYOUT_MAX];
 		struct layout l;
-		int n = desk_place(&s->desk, index, p, &l);
+		struct layout_rect holes[LAYOUT_FREE_MAX];
+		int n = desk_place(&s->desk, index, p, &l), nh = 0;
 		for (int i = 0; i < n; i++) {
 			struct window *w = xdg_window(s, p[i].id);
 			if (!w || p[i].id == s->desk.fullscreen[index])
@@ -81,6 +89,11 @@ void server_arrange(struct server *s, int index) {
 			struct wlr_box r = {p[i].r.x, top + p[i].r.y, p[i].r.w, p[i].r.h};
 			xdg_place(w, index, r, p[i].id == s->desk.focus[index]);
 		}
+		for (int i = 0; n >= 0 && i < l.nfree && nh < LAYOUT_FREE_MAX; i++)
+			holes[nh++] = (struct layout_rect){
+			    l.free[i].x + XDG_GAP, top + l.free[i].y + XDG_GAP,
+			    l.free[i].w - XDG_GAP, l.free[i].h - XDG_GAP};
+		fill_holes(s, index, holes, nh, n == 0 ? FILL_EMPTY : FILL_FREE);
 	}
 	struct wlr_box box;
 	outputs_canvas_box(s, index, &box);
@@ -96,6 +109,7 @@ void server_arrange(struct server *s, int index) {
 		                           grid_is_shown(&s->desk.grid, desk_pos(c)));
 	}
 	header_refresh(s);
+	fill_view(s);
 }
 
 void server_canvas_origin(struct server *s, int index, int *x, int *y) {
@@ -232,7 +246,7 @@ int server_run(void) {
 		goto out;
 	}
 	wlr_scene_node_set_enabled(&s.limbo->node, false);
-	if (header_init(&s) < 0 || status_init(&s) < 0)
+	if (header_init(&s) < 0 || status_init(&s) < 0 || fill_init(&s) < 0)
 		goto out;
 
 	s.seat = wlr_seat_create(s.display, "seat0");
@@ -288,6 +302,7 @@ out:
 	control_finish();
 	clients_finish(&s);
 	testsock_finish();
+	fill_finish(&s);
 	status_finish(&s);
 	header_finish(&s);
 	if (sigterm)

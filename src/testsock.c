@@ -17,6 +17,7 @@
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_scene.h>
 
+#include "fill.h"
 #include "header.h"
 #include "input.h"
 #include "outputs.h"
@@ -134,6 +135,20 @@ static int count(struct server *s, uint32_t argb) {
 		for (int x = 0; x < i.w; x++)
 			n += header_pixel(h, x, y) == argb;
 	return n;
+}
+
+static void list_fills(struct server *s, FILE *f) {
+	static const char *kinds[] = {"empty", "free", "fallen"};
+	struct fill_info i;
+	for (int c = 0; c < DESK_CANVASES; c++) {
+		struct grid_pos p = desk_pos(c);
+		int x, y;
+		server_canvas_origin(s, c, &x, &y);
+		for (int k = 0; fill_info(s, c, k, &i) == 0; k++)
+			fprintf(f, "fill %d%d %s %s %d %d %d %d %d %d %d %d %u\n", p.h, p.d,
+			        kinds[i.kind], i.name, x + i.r.x, y + i.r.y, i.r.w, i.r.h,
+			        i.w, i.h, i.scale, i.in_view, i.frames);
+	}
 }
 
 static void show_status(struct server *s, FILE *f) {
@@ -311,6 +326,10 @@ static int run(struct server *s, const char *line, FILE *f) {
 	unsigned int argb;
 	if (sscanf(line, "count %x", &argb) == 1) {
 		fprintf(f, "count %d\n", count(s, argb));
+		return 0;
+	}
+	if (strcmp(line, "fills") == 0) {
+		list_fills(s, f);
 		return 0;
 	}
 	if (strcmp(line, "status") == 0) {

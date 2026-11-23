@@ -74,8 +74,18 @@ They are installed in `/usr/share/tundra/borealis/art`, built from
 in `~/.config/tundra/borealis/art` goes instead. A drawing missing or broken
 leaves its place empty and says why.
 
-Still to come: volume and lid in the header, the pixel art of empty places,
-the lid, locking, notices and captures.
+Holes are filled with pixel art: an empty canvas, the places beside windows
+that no window takes, and the place of a fixed program that fell. Each kind
+has its drawings, in `empty`, `free` and `fallen` under those directories of
+drawings. A hole takes, at random, one of those of its kind that, at the
+largest whole scale that fits it, cover at least 4/5 of what the best one
+covers, and keeps it while it keeps its size. The scene scales the drawing,
+centred, and its first animation plays only while it is seen. The drawings
+that come with borealis are for development: a frame with a letter that
+blinks, `E`, `F` or a red `!`.
+
+Still to come: volume and lid in the header, the lid, locking, notices and
+captures.
 
 ## Configuration
 

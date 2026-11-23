@@ -12,6 +12,7 @@
 #include "screens.h"
 #include "status.h"
 
+struct fills;
 struct tdraw_theme;
 struct window;
 
@@ -72,6 +73,7 @@ struct server {
 	struct tdraw_theme *theme;
 	struct colors colors;
 	struct status status;
+	struct fills *fills;
 	struct wl_event_source *theme_source, *minute_source;
 	int minute_fd;
 	char clock[HEAD_TEXT];

@@ -14,8 +14,7 @@
 #define TUNDRA_BOREALIS_ART "/usr/share/tundra/borealis/art"
 #endif
 
-static int try_open(struct art *a, const char *path,
-                    const struct tdraw_theme *t) {
+int art_open(struct art *a, const char *path, const struct tdraw_theme *t) {
 	const char *err;
 	struct stat st;
 	int fd = open(path, O_RDONLY | O_CLOEXEC);
@@ -47,27 +46,34 @@ static int try_open(struct art *a, const char *path,
 	return 0;
 }
 
-void art_load(struct art *a, const char *name, const struct tdraw_theme *t) {
+void art_user_dir(char *buf, unsigned long n) {
 	const char *base = getenv("XDG_CONFIG_HOME"), *home = getenv("HOME");
+	if (base && *base)
+		snprintf(buf, n, "%s/tundra/borealis/art", base);
+	else if (home && *home)
+		snprintf(buf, n, "%s/.config/tundra/borealis/art", home);
+	else if (n)
+		buf[0] = '\0';
+}
+
+const char *art_system_dir(void) {
 	const char *sys = getenv("TUNDRA_BOREALIS_ART");
-	char path[4096];
+	return sys && *sys ? sys : TUNDRA_BOREALIS_ART;
+}
+
+void art_load(struct art *a, const char *name, const struct tdraw_theme *t) {
+	char dir[4096], path[4200];
 	int r = -1;
 
 	memset(a, 0, sizeof(*a));
-	if (base && *base)
-		snprintf(path, sizeof(path), "%s/tundra/borealis/art/%s.toa", base,
-		         name);
-	else if (home && *home)
-		snprintf(path, sizeof(path), "%s/.config/tundra/borealis/art/%s.toa",
-		         home, name);
-	else
-		path[0] = '\0';
-	if (path[0])
-		r = try_open(a, path, t);
+	art_user_dir(dir, sizeof(dir));
+	if (dir[0]) {
+		snprintf(path, sizeof(path), "%s/%s.toa", dir, name);
+		r = art_open(a, path, t);
+	}
 	if (r < 0) {
-		snprintf(path, sizeof(path), "%s/%s.toa",
-		         sys && *sys ? sys : TUNDRA_BOREALIS_ART, name);
-		if (try_open(a, path, t) < 0)
+		snprintf(path, sizeof(path), "%s/%s.toa", art_system_dir(), name);
+		if (art_open(a, path, t) < 0)
 			fprintf(stderr, "art: %s: no such file\n", path);
 	}
 }

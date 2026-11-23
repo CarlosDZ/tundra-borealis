@@ -1,4 +1,3 @@
-#include <drm_fourcc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,25 +5,19 @@
 #include <time.h>
 #include <tundra/draw.h>
 #include <unistd.h>
-#include <wlr/interfaces/wlr_buffer.h>
 #include <wlr/types/wlr_scene.h>
 
+#include "fill.h"
 #include "header.h"
 #include "outputs.h"
+#include "pixbuf.h"
 #include "server.h"
-
-struct hbuf {
-	struct wlr_buffer base;
-	uint32_t *px;
-	size_t stride;
-	struct tdraw_canvas *canvas;
-};
 
 struct header {
 	struct wl_list link;
 	struct server *server;
 	struct wlr_scene_buffer *node;
-	struct hbuf *buf[2];
+	struct pixbuf *buf[2];
 	int on;
 	struct tdraw_font *font;
 	int x, y, w, screen_h, line, height, screen, shown;
@@ -34,68 +27,6 @@ struct header {
 	int battery, brightness;
 	unsigned int drawn;
 };
-
-static void hbuf_destroy(struct wlr_buffer *base) {
-	struct hbuf *b = wl_container_of(base, b, base);
-	tdraw_canvas_free(b->canvas);
-	free(b->px);
-	free(b);
-}
-
-static bool hbuf_begin(struct wlr_buffer *base, uint32_t flags, void **data,
-                       uint32_t *format, size_t *stride) {
-	struct hbuf *b = wl_container_of(base, b, base);
-	if (flags & WLR_BUFFER_DATA_PTR_ACCESS_WRITE)
-		return false;
-	*data = b->px;
-	*format = DRM_FORMAT_ARGB8888;
-	*stride = b->stride;
-	return true;
-}
-
-static void hbuf_end(struct wlr_buffer *base) { (void)base; }
-
-static const struct wlr_buffer_impl hbuf_impl = {
-    .destroy = hbuf_destroy,
-    .begin_data_ptr_access = hbuf_begin,
-    .end_data_ptr_access = hbuf_end,
-};
-
-static struct hbuf *hbuf_new(int w, int h) {
-	struct hbuf *b = calloc(1, sizeof(*b));
-	if (!b)
-		return NULL;
-	b->stride = (size_t)w * 4;
-	b->px = calloc((size_t)h, b->stride);
-	b->canvas = b->px ? tdraw_canvas_new(b->px, w, h, (int)b->stride) : NULL;
-	if (!b->canvas) {
-		free(b->px);
-		free(b);
-		return NULL;
-	}
-	wlr_buffer_init(&b->base, &hbuf_impl, w, h);
-	return b;
-}
-
-static void hbuf_drop(struct hbuf *b) {
-	if (b)
-		wlr_buffer_drop(&b->base);
-}
-
-static struct hbuf *spare(struct header *h) {
-	int i = h->on == 0 ? 1 : 0;
-	struct hbuf *b = h->buf[i];
-	if (b && (b->base.width != h->w || b->base.height != h->height ||
-	          b->base.n_locks > 0)) {
-		hbuf_drop(b);
-		b = h->buf[i] = NULL;
-	}
-	if (!b)
-		b = h->buf[i] = hbuf_new(h->w, h->height);
-	if (b)
-		h->on = i;
-	return b;
-}
 
 static void paint_status(struct header *h, struct tdraw_canvas *c) {
 	struct server *s = h->server;
@@ -134,7 +65,7 @@ static void paint_status(struct header *h, struct tdraw_canvas *c) {
 static void paint(struct header *h, const char *place) {
 	struct server *s = h->server;
 	const struct colors *c = &s->colors;
-	struct hbuf *b = spare(h);
+	struct pixbuf *b = pixbuf_spare(h->buf, &h->on, h->w, h->height);
 	if (!b)
 		return;
 	tdraw_fill(b->canvas, 0, 0, h->w, h->height, c->surface);
@@ -200,8 +131,8 @@ void header_destroy(struct header *h, int scene_gone) {
 	wl_list_remove(&h->link);
 	if (!scene_gone)
 		wlr_scene_node_destroy(&h->node->node);
-	hbuf_drop(h->buf[0]);
-	hbuf_drop(h->buf[1]);
+	pixbuf_drop(h->buf[0]);
+	pixbuf_drop(h->buf[1]);
 	tdraw_font_free(h->font);
 	free(h);
 }
@@ -295,6 +226,7 @@ static int on_theme(int fd, uint32_t mask, void *data) {
 	(void)mask;
 	if (load_theme(s)) {
 		status_theme(s);
+		fill_theme(s);
 		outputs_recolor(s);
 		server_arrange_all(s);
 	}
@@ -357,7 +289,7 @@ void header_info(const struct header *h, struct header_info *i) {
 }
 
 uint32_t header_pixel(const struct header *h, int x, int y) {
-	const struct hbuf *b = h && h->on >= 0 ? h->buf[h->on] : NULL;
+	const struct pixbuf *b = h && h->on >= 0 ? h->buf[h->on] : NULL;
 	if (!b || x < 0 || y < 0 || x >= b->base.width || y >= b->base.height)
 		return 0;
 	return b->px[(size_t)y * (b->stride / 4) + (size_t)x];

@@ -1,0 +1,63 @@
+# A drawing for development (DR-185): its kind by its letter, its shape
+# by its frame, and a blink to see that it animates.
+
+size = 24 12
+
+palette {
+	. = clear
+	b = border 3e494f
+	t = text ccd2d6
+	d = dim 889196
+}
+
+base {
+	row = bbbbbbbbbbbbbbbbbbbbbbbb
+	row = b......................b
+	row = b........ttttt.........b
+	row = b........t.............b
+	row = b........t.............b
+	row = b........tttt..........b
+	row = b........t.............b
+	row = b........t.............b
+	row = b........t.............b
+	row = b......................b
+	row = b......................b
+	row = bbbbbbbbbbbbbbbbbbbbbbbb
+}
+
+anim {
+	name = blink
+	loop = yes
+}
+
+frame {
+	ms = 500
+	row = bbbbbbbbbbbbbbbbbbbbbbbb
+	row = b......................b
+	row = b........ttttt.........b
+	row = b........t.............b
+	row = b........t.............b
+	row = b........tttt..........b
+	row = b........t.............b
+	row = b........t.............b
+	row = b........t.............b
+	row = b......................b
+	row = b......................b
+	row = bbbbbbbbbbbbbbbbbbbbbbbb
+}
+
+frame {
+	ms = 500
+	row = bbbbbbbbbbbbbbbbbbbbbbbb
+	row = b......................b
+	row = b........ddddd.........b
+	row = b........d.............b
+	row = b........d.............b
+	row = b........dddd..........b
+	row = b........d.............b
+	row = b........d.............b
+	row = b........d.............b
+	row = b......................b
+	row = b......................b
+	row = bbbbbbbbbbbbbbbbbbbbbbbb
+}
