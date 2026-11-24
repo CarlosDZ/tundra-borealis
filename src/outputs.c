@@ -105,6 +105,8 @@ void outputs_apply(struct server *s) {
 		header_show(sec->header, 0);
 	int hm = m ? header_height(m->header) : 0;
 	int hs = sec ? header_height(sec->header) : 0;
+	if (mw - XDG_GAP <= 0 || mh - hm - XDG_GAP <= 0)
+		return;
 	desk_resize(&s->desk, mw - XDG_GAP, mh - hm - XDG_GAP);
 	desk_resize_second(&s->desk, sw - XDG_GAP, sh - hs - XDG_GAP);
 	server_arrange_all(s);

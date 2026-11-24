@@ -179,6 +179,13 @@ static int unplug(struct server *s) {
 	return 0;
 }
 
+static int unplug_all(struct server *s) {
+	struct wlr_output *o;
+	while ((o = outputs_main(s)))
+		wlr_output_destroy(o);
+	return 0;
+}
+
 static void list_fixed(struct server *s, FILE *f) {
 	for (int c = 0; c < DESK_CANVASES; c++) {
 		if (!s->desk.fixed[c])
@@ -306,6 +313,8 @@ static int run(struct server *s, const char *line, FILE *f) {
 		return plug(s);
 	if (strcmp(line, "unplug") == 0)
 		return unplug(s);
+	if (strcmp(line, "unplug all") == 0)
+		return unplug_all(s);
 	if (strcmp(line, "fixed") == 0) {
 		list_fixed(s, f);
 		return 0;
