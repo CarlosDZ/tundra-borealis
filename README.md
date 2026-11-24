@@ -52,8 +52,9 @@ the next depth. Neither axis wraps around.
 
 Each screen has a header on top: the place on the left (`H2 P3`, second
 across and third deep), the date and time in the middle (`2026-11-23  14:05`),
-repainted as each minute starts. Its line is the largest size the `ui` fonts of
-`/etc/tundra/fonts` draw to the pixel within 1/45 of the screen's height (24 at
+repainted as each minute starts. It writes in the `ui.bold` fonts of
+`/etc/tundra/fonts`, or in `ui` when there are none. Its line is the largest
+size those fonts draw to the pixel within 1/45 of the screen's height (24 at
 1080 pixels, 48 at 2160), with a sixth of it above and below. A fullscreen
 window covers it. Its colors, and those of the borders and backgrounds, come
 from the theme of libdraw, `/etc/tundra/theme` and `~/.config/tundra/theme`,

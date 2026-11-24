@@ -96,7 +96,7 @@ static void show_header(struct server *s, FILE *f, const char *role,
 	if (!h)
 		return;
 	header_info(h, &i);
-	fprintf(f, "header %s %d %d %d %d %d %d %d\t%s\t%s\n", role, i.x, i.y, i.w,
+	fprintf(f, "header %s %d %d %d %d %d %d %s\t%s\t%s\n", role, i.x, i.y, i.w,
 	        i.h, i.line, i.shown, i.font, i.place, i.clock);
 }
 

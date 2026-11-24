@@ -20,6 +20,7 @@ struct header {
 	struct pixbuf *buf[2];
 	int on;
 	struct tdraw_font *font;
+	const char *use;
 	int x, y, w, screen_h, line, height, screen, shown;
 	int stale;
 	char place[HEAD_TEXT], clock[HEAD_TEXT];
@@ -138,19 +139,29 @@ void header_destroy(struct header *h, int scene_gone) {
 }
 
 static void set_line(struct header *h, int screen_h) {
-	const char *err;
-	int target = head_target(screen_h);
-	int line = tdraw_font_exact("ui", target, &err);
-	if (line < 0)
-		fprintf(stderr, "header: %s\n", err);
-	if (line <= 0)
-		line = target;
-	if (line != h->line || !h->font) {
-		tdraw_font_free(h->font);
-		h->font = tdraw_font_open("ui", line, &err);
-		if (!h->font)
-			fprintf(stderr, "header: %s\n", err);
+	static const char *const uses[] = {"ui.bold", "ui"};
+	const char *err = "no fonts";
+	int target = head_target(screen_h), line = target;
+	struct tdraw_font *font = NULL;
+	const char *use = NULL;
+	for (size_t u = 0; u < sizeof(uses) / sizeof(*uses) && !font; u++) {
+		int exact = tdraw_font_exact(uses[u], target, &err);
+		if (exact == -1)
+			err = "out of memory";
+		if (exact < 0)
+			continue;
+		line = exact ? exact : target;
+		font = tdraw_font_open(uses[u], line, &err);
+		use = uses[u];
 	}
+	if (!font) {
+		fprintf(stderr, "header: %s\n", err);
+		line = target;
+		use = NULL;
+	}
+	tdraw_font_free(h->font);
+	h->font = font;
+	h->use = use;
 	h->screen_h = screen_h;
 	h->line = line;
 	h->height = head_height(line);
@@ -283,7 +294,7 @@ void header_info(const struct header *h, struct header_info *i) {
 	i->h = h->height;
 	i->line = h->line;
 	i->shown = h->shown;
-	i->font = h->font != NULL;
+	i->font = h->font ? h->use : "-";
 	i->place = h->place;
 	i->clock = h->clock;
 }

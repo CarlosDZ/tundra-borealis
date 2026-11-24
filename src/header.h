@@ -21,8 +21,8 @@ void header_refresh(struct server *s);
 
 #ifdef TUNDRA_BOREALIS_TEST
 struct header_info {
-	int x, y, w, h, line, shown, font;
-	const char *place, *clock;
+	int x, y, w, h, line, shown;
+	const char *font, *place, *clock;
 };
 
 void header_info(const struct header *h, struct header_info *i);

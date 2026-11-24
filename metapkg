@@ -1,7 +1,7 @@
 name=tundra-borealis
 author=CarlosDZ
-version=0.2_1
+version=0.3_0
 v_date=2026-11-24
 license=GPL-3.0-or-later
-depends=wlroots0.20 tundra-libconf>=0.1_0 tundra-libdraw>=0.4_0
+depends=wlroots0.20 tundra-libconf>=0.1_0 tundra-libdraw>=0.5_0
 description=Compositor of Tundra OS

@@ -67,4 +67,21 @@ check "a fullscreen window covers the header" [ "$(box a)" = "0 0 1280 720" ]
 chord 125 33
 
 check "stops cleanly" stop
+
+BOLD=/usr/share/fonts/TTF/DejaVuSansMono-Bold.ttf
+if [ -e "$FONT" ] && [ -e "$BOLD" ]; then
+	printf 'ui = %s\nui.bold = %s\n' "$FONT" "$BOLD" >"$HOME/.config/tundra/fonts"
+	check "starts again with ui.bold" start
+	check "the header writes in ui.bold" \
+		[ "$(header main | cut -d' ' -f9)" = ui.bold ]
+	check "and still shows the place" [ "$(ink 0 200)" -gt 0 ]
+	check "stops cleanly" stop
+	printf 'ui = %s\nui.bold = /nonexistent.ttf\n' "$FONT" \
+		>"$HOME/.config/tundra/fonts"
+	check "starts again with no font of ui.bold" start
+	check "the header takes ui" [ "$(header main | cut -d' ' -f9)" = ui ]
+	check "stops cleanly" stop
+else
+	printf '# no %s or %s: ui.bold is not checked\n' "$FONT" "$BOLD"
+fi
 finish
