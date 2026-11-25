@@ -387,6 +387,70 @@ static int run(struct server *s, const char *line, FILE *f) {
 	return -1;
 }
 
+#define LATENCY_WAIT_MS 2000
+
+static struct latency {
+	int fd;
+	struct timespec t0;
+	struct wl_listener commit, destroy;
+	struct wl_event_source *timer;
+} lat = {.fd = -1};
+
+static void latency_end(long us) {
+	if (lat.fd < 0)
+		return;
+	char buf[64];
+	int n = us >= 0 ? snprintf(buf, sizeof(buf), "latency %ld\nok\n", us)
+	                : snprintf(buf, sizeof(buf), "error: no frame\n");
+	if (write(lat.fd, buf, (size_t)n) < 0)
+		perror("test socket error");
+	close(lat.fd);
+	lat.fd = -1;
+	wl_list_remove(&lat.commit.link);
+	wl_list_remove(&lat.destroy.link);
+	wl_event_source_remove(lat.timer);
+	lat.timer = NULL;
+}
+
+static void latency_commit(struct wl_listener *l, void *data) {
+	(void)l, (void)data;
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	latency_end((t.tv_sec - lat.t0.tv_sec) * 1000000L +
+	            (t.tv_nsec - lat.t0.tv_nsec) / 1000);
+}
+
+static void latency_gone(struct wl_listener *l, void *data) {
+	(void)l, (void)data;
+	latency_end(-1);
+}
+
+static int latency_timeout(void *data) {
+	(void)data;
+	latency_end(-1);
+	return 0;
+}
+
+static int latency(struct server *s, int code, int fd) {
+	if (lat.fd >= 0 || !s->active)
+		return -1;
+	struct wlr_surface *surface = s->active->toplevel->base->surface;
+	lat.timer = wl_event_loop_add_timer(wl_display_get_event_loop(s->display),
+	                                    latency_timeout, NULL);
+	if (!lat.timer)
+		return -1;
+	wl_event_source_timer_update(lat.timer, LATENCY_WAIT_MS);
+	lat.fd = fd;
+	lat.commit.notify = latency_commit;
+	wl_signal_add(&surface->events.commit, &lat.commit);
+	lat.destroy.notify = latency_gone;
+	wl_signal_add(&surface->events.destroy, &lat.destroy);
+	clock_gettime(CLOCK_MONOTONIC, &lat.t0);
+	key(code, "down");
+	key(code, "up");
+	return 0;
+}
+
 static void answer(struct server *s, int fd) {
 	char line[TESTSOCK_LINE];
 	size_t len = 0;
@@ -399,6 +463,14 @@ static void answer(struct server *s, int fd) {
 	line[len] = '\0';
 
 	int out = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+	int code;
+	if (sscanf(line, "latency %d", &code) == 1) {
+		if (out >= 0 && latency(s, code, out) < 0) {
+			dprintf(out, "error: %s\n", line);
+			close(out);
+		}
+		return;
+	}
 	FILE *f = out < 0 ? NULL : fdopen(out, "w");
 	if (!f) {
 		if (out >= 0)
@@ -454,6 +526,7 @@ int testsock_init(struct server *s) {
 }
 
 void testsock_finish(void) {
+	latency_end(-1);
 	if (devices) {
 		wlr_keyboard_finish(&keyboard);
 		wlr_pointer_finish(&pointer);

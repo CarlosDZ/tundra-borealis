@@ -31,7 +31,7 @@ struct win {
 
 static struct win main_win = {.tag = ""}, dialog_win = {.tag = "dlg-"};
 static const char *app;
-static int want_full, want_dialog, want_menu, listing, running = 1;
+static int want_full, want_dialog, want_menu, want_echo, listing, running = 1;
 static struct wl_surface *menu_surface;
 
 static void say(const char *fmt, ...) {
@@ -110,6 +110,8 @@ static void kb_key(void *d, struct wl_keyboard *k, uint32_t serial,
 	(void)serial;
 	(void)time;
 	say("key %u %u", key, state);
+	if (want_echo && state == WL_KEYBOARD_KEY_STATE_PRESSED && main_win.surface)
+		wl_surface_commit(main_win.surface);
 }
 
 static void kb_modifiers(void *d, struct wl_keyboard *k, uint32_t serial,
@@ -430,6 +432,10 @@ static int option(const char *o) {
 		want_menu = 1;
 		return 0;
 	}
+	if (strcmp(o, "echo") == 0) {
+		want_echo = 1;
+		return 0;
+	}
 	return -1;
 }
 
@@ -441,7 +447,7 @@ int main(int argc, char **argv) {
 		bad |= option(argv[i]) < 0;
 	if (bad) {
 		fprintf(stderr, "usage: client [list | window app_id [min=WxH] [full] "
-		                "[dialog=WxH] [menu]]\n");
+		                "[dialog=WxH] [menu] [echo]]\n");
 		return 2;
 	}
 	if (window)
