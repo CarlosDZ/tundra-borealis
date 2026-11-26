@@ -4,6 +4,7 @@
 #include <wlr/backend.h>
 #include <wlr/backend/session.h>
 #include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
 #include <wlr/types/wlr_pointer_gestures_v1.h>
@@ -473,6 +474,12 @@ static void request_set_cursor(struct wl_listener *listener, void *data) {
 		                       e->hotspot_y);
 }
 
+static void request_set_selection(struct wl_listener *listener, void *data) {
+	struct server *s = wl_container_of(listener, s, request_set_selection);
+	struct wlr_seat_request_set_selection_event *e = data;
+	wlr_seat_set_selection(s->seat, e->source, e->serial);
+}
+
 #define LISTEN(signal, field, fn)                                              \
 	do {                                                                       \
 		s->field.notify = fn;                                                  \
@@ -509,6 +516,8 @@ int input_init(struct server *s) {
 	LISTEN(s->cursor->events.hold_end, hold_end, hold_end);
 	LISTEN(s->seat->events.request_set_cursor, request_set_cursor,
 	       request_set_cursor);
+	LISTEN(s->seat->events.request_set_selection, request_set_selection,
+	       request_set_selection);
 	LISTEN(s->virtual_keyboards->events.new_virtual_keyboard,
 	       new_virtual_keyboard, new_virtual_keyboard);
 	LISTEN(s->virtual_pointers->events.new_virtual_pointer, new_virtual_pointer,
@@ -535,6 +544,7 @@ void input_finish(struct server *s) {
 		wl_list_remove(&s->hold_begin.link);
 		wl_list_remove(&s->hold_end.link);
 		wl_list_remove(&s->request_set_cursor.link);
+		wl_list_remove(&s->request_set_selection.link);
 		wl_list_remove(&s->new_virtual_keyboard.link);
 		wl_list_remove(&s->new_virtual_pointer.link);
 		s->input_ready = 0;

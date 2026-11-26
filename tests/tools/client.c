@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,10 @@ static struct wl_compositor *compositor;
 static struct wl_seat *seat;
 static struct wl_shm *shm;
 static struct xdg_wm_base *wm_base;
+static struct wl_data_device_manager *ddm;
+static struct wl_data_device *data_device;
+static const char *copy_text;
+static int want_paste, copied;
 struct win {
 	const char *tag;
 	struct wl_surface *surface;
@@ -59,6 +64,9 @@ static void on_global(void *data, struct wl_registry *registry, uint32_t name,
 		shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
 	else if (strcmp(interface, "xdg_wm_base") == 0)
 		wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
+	else if (strcmp(interface, "wl_data_device_manager") == 0)
+		ddm = wl_registry_bind(registry, name,
+		                       &wl_data_device_manager_interface, 1);
 	else if (strcmp(interface, "wl_seat") == 0 && !seat)
 		seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
 }
@@ -84,15 +92,115 @@ static void kb_keymap(void *d, struct wl_keyboard *k, uint32_t format, int fd,
 	close(fd);
 }
 
+static void source_target(void *d, struct wl_data_source *src,
+                          const char *mime) {
+	(void)d;
+	(void)src;
+	(void)mime;
+}
+
+static void source_send(void *d, struct wl_data_source *src, const char *mime,
+                        int fd) {
+	(void)d;
+	(void)src;
+	(void)mime;
+	if (write(fd, copy_text, strlen(copy_text)) < 0)
+		perror("write error");
+	close(fd);
+}
+
+static void source_cancelled(void *d, struct wl_data_source *src) {
+	(void)d;
+	wl_data_source_destroy(src);
+	say("cancelled");
+}
+
+static const struct wl_data_source_listener source_listener = {
+    .target = source_target,
+    .send = source_send,
+    .cancelled = source_cancelled,
+};
+
 static void kb_enter(void *d, struct wl_keyboard *k, uint32_t serial,
                      struct wl_surface *s, struct wl_array *keys) {
 	(void)d;
 	(void)k;
-	(void)serial;
-	(void)s;
 	(void)keys;
 	say("kbd-enter%s", s == dialog_win.surface ? " dlg" : "");
+	if (copy_text && data_device && !copied) {
+		struct wl_data_source *src =
+		    wl_data_device_manager_create_data_source(ddm);
+		wl_data_source_add_listener(src, &source_listener, NULL);
+		wl_data_source_offer(src, "text/plain;charset=utf-8");
+		wl_data_device_set_selection(data_device, src, serial);
+		copied = 1;
+		say("copied");
+	}
 }
+
+static void dd_offer(void *d, struct wl_data_device *dd,
+                     struct wl_data_offer *o) {
+	(void)d;
+	(void)dd;
+	(void)o;
+}
+
+static void dd_enter(void *d, struct wl_data_device *dd, uint32_t serial,
+                     struct wl_surface *s, wl_fixed_t x, wl_fixed_t y,
+                     struct wl_data_offer *o) {
+	(void)d;
+	(void)dd;
+	(void)serial;
+	(void)s;
+	(void)x;
+	(void)y;
+	(void)o;
+}
+
+static void dd_leave(void *d, struct wl_data_device *dd) {
+	(void)d;
+	(void)dd;
+}
+
+static void dd_motion(void *d, struct wl_data_device *dd, uint32_t time,
+                      wl_fixed_t x, wl_fixed_t y) {
+	(void)d;
+	(void)dd;
+	(void)time;
+	(void)x;
+	(void)y;
+}
+
+static void dd_selection(void *d, struct wl_data_device *dd,
+                         struct wl_data_offer *o) {
+	(void)d;
+	(void)dd;
+	int fds[2];
+	if (!want_paste || !o || pipe2(fds, O_CLOEXEC) < 0)
+		return;
+	wl_data_offer_receive(o, "text/plain;charset=utf-8", fds[1]);
+	close(fds[1]);
+	wl_display_flush(wl_proxy_get_display((struct wl_proxy *)dd));
+	char buf[256];
+	size_t n = 0;
+	ssize_t r;
+	while (n < sizeof(buf) - 1 &&
+	       (r = read(fds[0], buf + n, sizeof(buf) - 1 - n)) > 0)
+		n += (size_t)r;
+	close(fds[0]);
+	buf[n] = 0;
+	say("pasted %s", buf);
+	wl_data_offer_destroy(o);
+}
+
+static const struct wl_data_device_listener dd_listener = {
+    .data_offer = dd_offer,
+    .enter = dd_enter,
+    .leave = dd_leave,
+    .motion = dd_motion,
+    .drop = dd_leave,
+    .selection = dd_selection,
+};
 
 static void kb_leave(void *d, struct wl_keyboard *k, uint32_t serial,
                      struct wl_surface *s) {
@@ -410,6 +518,10 @@ static int open_window(struct wl_display *display) {
 	xdg_wm_base_add_listener(wm_base, &wm_base_listener, NULL);
 	if (seat)
 		wl_seat_add_listener(seat, &seat_listener, NULL);
+	if (seat && ddm) {
+		data_device = wl_data_device_manager_get_data_device(ddm, seat);
+		wl_data_device_add_listener(data_device, &dd_listener, NULL);
+	}
 	open_toplevel(&main_win, app, NULL);
 	while (running && wl_display_dispatch(display) != -1)
 		;
@@ -432,6 +544,14 @@ static int option(const char *o) {
 		want_menu = 1;
 		return 0;
 	}
+	if (strncmp(o, "copy=", 5) == 0) {
+		copy_text = o + 5;
+		return 0;
+	}
+	if (strcmp(o, "paste") == 0) {
+		want_paste = 1;
+		return 0;
+	}
 	if (strcmp(o, "echo") == 0) {
 		want_echo = 1;
 		return 0;
@@ -447,7 +567,7 @@ int main(int argc, char **argv) {
 		bad |= option(argv[i]) < 0;
 	if (bad) {
 		fprintf(stderr, "usage: client [list | window app_id [min=WxH] [full] "
-		                "[dialog=WxH] [menu] [echo]]\n");
+		                "[dialog=WxH] [menu] [echo] [copy=TEXT] [paste]]\n");
 		return 2;
 	}
 	if (window)
