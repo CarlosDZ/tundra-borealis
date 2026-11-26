@@ -48,6 +48,7 @@ struct server {
 	struct wl_listener new_decoration;
 	struct wl_list keyboards;
 	struct wl_listener new_input, request_set_cursor, request_set_selection;
+	struct wl_listener request_set_primary_selection;
 	struct wl_listener new_virtual_keyboard, new_virtual_pointer;
 	struct wl_listener cursor_motion, cursor_motion_absolute, cursor_button,
 	    cursor_axis, cursor_frame;

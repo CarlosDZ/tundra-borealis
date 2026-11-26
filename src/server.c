@@ -14,6 +14,7 @@
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_seat.h>
@@ -223,7 +224,8 @@ int server_run(void) {
 	}
 	if (!wlr_compositor_create(s.display, COMPOSITOR_VERSION, s.renderer) ||
 	    !wlr_subcompositor_create(s.display) ||
-	    !wlr_data_device_manager_create(s.display)) {
+	    !wlr_data_device_manager_create(s.display) ||
+	    !wlr_primary_selection_v1_device_manager_create(s.display)) {
 		fprintf(stderr, "cannot create the core globals\n");
 		goto out;
 	}

@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <fcntl.h>
+#include <linux/input-event-codes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +9,7 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
+#include "primary-selection-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
 #define DEFAULT_W 320
@@ -26,6 +28,11 @@ static struct wl_data_device_manager *ddm;
 static struct wl_data_device *data_device;
 static const char *copy_text;
 static int want_paste, copied;
+static struct zwp_primary_selection_device_manager_v1 *psm;
+static struct zwp_primary_selection_device_v1 *primary_device;
+static struct zwp_primary_selection_offer_v1 *primary_offer;
+static const char *primary_text;
+static int want_primary_paste, selected;
 struct win {
 	const char *tag;
 	struct wl_surface *surface;
@@ -64,6 +71,12 @@ static void on_global(void *data, struct wl_registry *registry, uint32_t name,
 		shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
 	else if (strcmp(interface, "xdg_wm_base") == 0)
 		wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
+	else if (strcmp(interface,
+	                zwp_primary_selection_device_manager_v1_interface.name) ==
+	         0)
+		psm = wl_registry_bind(
+		    registry, name, &zwp_primary_selection_device_manager_v1_interface,
+		    1);
 	else if (strcmp(interface, "wl_data_device_manager") == 0)
 		ddm = wl_registry_bind(registry, name,
 		                       &wl_data_device_manager_interface, 1);
@@ -271,14 +284,89 @@ static void ptr_motion(void *d, struct wl_pointer *p, uint32_t time,
 	(void)y;
 }
 
+static void primary_send(void *d, struct zwp_primary_selection_source_v1 *src,
+                         const char *mime, int fd) {
+	(void)d;
+	(void)src;
+	(void)mime;
+	if (write(fd, primary_text, strlen(primary_text)) < 0)
+		perror("write error");
+	close(fd);
+}
+
+static void primary_cancelled(void *d,
+                              struct zwp_primary_selection_source_v1 *src) {
+	(void)d;
+	zwp_primary_selection_source_v1_destroy(src);
+	say("primary cancelled");
+}
+
+static const struct zwp_primary_selection_source_v1_listener
+    primary_source_listener = {.send = primary_send,
+                               .cancelled = primary_cancelled};
+
+static void primary_select(uint32_t serial) {
+	struct zwp_primary_selection_source_v1 *src =
+	    zwp_primary_selection_device_manager_v1_create_source(psm);
+	zwp_primary_selection_source_v1_add_listener(src, &primary_source_listener,
+	                                             NULL);
+	zwp_primary_selection_source_v1_offer(src, "text/plain;charset=utf-8");
+	zwp_primary_selection_device_v1_set_selection(primary_device, src, serial);
+	selected = 1;
+	say("selected");
+}
+
+static void primary_paste(struct wl_pointer *p) {
+	int fds[2];
+	if (!primary_offer || pipe2(fds, O_CLOEXEC) < 0)
+		return;
+	zwp_primary_selection_offer_v1_receive(primary_offer,
+	                                       "text/plain;charset=utf-8", fds[1]);
+	close(fds[1]);
+	wl_display_flush(wl_proxy_get_display((struct wl_proxy *)p));
+	char buf[256];
+	size_t n = 0;
+	ssize_t r;
+	while (n < sizeof(buf) - 1 &&
+	       (r = read(fds[0], buf + n, sizeof(buf) - 1 - n)) > 0)
+		n += (size_t)r;
+	close(fds[0]);
+	buf[n] = 0;
+	say("pasted-primary %s", buf);
+}
+
 static void ptr_button(void *d, struct wl_pointer *p, uint32_t serial,
                        uint32_t time, uint32_t button, uint32_t state) {
 	(void)d;
-	(void)p;
-	(void)serial;
 	(void)time;
 	say("button %u %u", button, state);
+	if (state != WL_POINTER_BUTTON_STATE_PRESSED)
+		return;
+	if (primary_text && primary_device && !selected)
+		primary_select(serial);
+	if (want_primary_paste && button == BTN_MIDDLE)
+		primary_paste(p);
 }
+
+static void ps_data_offer(void *d, struct zwp_primary_selection_device_v1 *dev,
+                          struct zwp_primary_selection_offer_v1 *o) {
+	(void)d;
+	(void)dev;
+	(void)o;
+}
+
+static void ps_selection(void *d, struct zwp_primary_selection_device_v1 *dev,
+                         struct zwp_primary_selection_offer_v1 *o) {
+	(void)d;
+	(void)dev;
+	if (primary_offer)
+		zwp_primary_selection_offer_v1_destroy(primary_offer);
+	primary_offer = o;
+}
+
+static const struct zwp_primary_selection_device_v1_listener
+    primary_device_listener = {.data_offer = ps_data_offer,
+                               .selection = ps_selection};
 
 static void ptr_axis(void *d, struct wl_pointer *p, uint32_t time,
                      uint32_t axis, wl_fixed_t value) {
@@ -522,6 +610,12 @@ static int open_window(struct wl_display *display) {
 		data_device = wl_data_device_manager_get_data_device(ddm, seat);
 		wl_data_device_add_listener(data_device, &dd_listener, NULL);
 	}
+	if (seat && psm) {
+		primary_device =
+		    zwp_primary_selection_device_manager_v1_get_device(psm, seat);
+		zwp_primary_selection_device_v1_add_listener(
+		    primary_device, &primary_device_listener, NULL);
+	}
 	open_toplevel(&main_win, app, NULL);
 	while (running && wl_display_dispatch(display) != -1)
 		;
@@ -552,6 +646,14 @@ static int option(const char *o) {
 		want_paste = 1;
 		return 0;
 	}
+	if (strncmp(o, "primary=", 8) == 0) {
+		primary_text = o + 8;
+		return 0;
+	}
+	if (strcmp(o, "paste-primary") == 0) {
+		want_primary_paste = 1;
+		return 0;
+	}
 	if (strcmp(o, "echo") == 0) {
 		want_echo = 1;
 		return 0;
@@ -567,7 +669,8 @@ int main(int argc, char **argv) {
 		bad |= option(argv[i]) < 0;
 	if (bad) {
 		fprintf(stderr, "usage: client [list | window app_id [min=WxH] [full] "
-		                "[dialog=WxH] [menu] [echo] [copy=TEXT] [paste]]\n");
+		                "[dialog=WxH] [menu] [echo] [copy=TEXT] [paste] "
+		                "[primary=TEXT] [paste-primary]]\n");
 		return 2;
 	}
 	if (window)

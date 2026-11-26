@@ -92,11 +92,24 @@ $(TEST_PROTO)/xdg-shell-protocol.c:
 	@mkdir -p $(dir $@)
 	$(WAYLAND_SCANNER) private-code $(XDG_SHELL_XML) $@
 
+PRIMARY_XML = $(shell $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols)/unstable/primary-selection/primary-selection-unstable-v1.xml
+
+$(TEST_PROTO)/primary-selection-unstable-v1-client-protocol.h:
+	@mkdir -p $(dir $@)
+	$(WAYLAND_SCANNER) client-header $(PRIMARY_XML) $@
+
+$(TEST_PROTO)/primary-selection-unstable-v1-protocol.c:
+	@mkdir -p $(dir $@)
+	$(WAYLAND_SCANNER) private-code $(PRIMARY_XML) $@
+
 $(TEST_BUILD)/tools/client: tests/tools/client.c \
-		$(TEST_PROTO)/xdg-shell-client-protocol.h $(TEST_PROTO)/xdg-shell-protocol.c
+		$(TEST_PROTO)/xdg-shell-client-protocol.h $(TEST_PROTO)/xdg-shell-protocol.c \
+		$(TEST_PROTO)/primary-selection-unstable-v1-client-protocol.h \
+		$(TEST_PROTO)/primary-selection-unstable-v1-protocol.c
 	@mkdir -p $(dir $@)
 	$(CC) $(TUNDRA_STD) $(CFLAGS) -I$(TEST_PROTO) $(TOOL_CFLAGS) -o $@ $< \
-		$(TEST_PROTO)/xdg-shell-protocol.c $(TOOL_LIBS)
+		$(TEST_PROTO)/xdg-shell-protocol.c \
+		$(TEST_PROTO)/primary-selection-unstable-v1-protocol.c $(TOOL_LIBS)
 
 $(TEST_BUILD)/tools/%: tests/tools/%.c
 	@mkdir -p $(dir $@)

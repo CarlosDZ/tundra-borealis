@@ -1,6 +1,6 @@
 # Template file for 'tundra-borealis'
 pkgname=tundra-borealis
-version=0.3
+version=0.4
 revision=0
 build_style=gnu-makefile
 make_check_target=check-unit
@@ -10,7 +10,7 @@ makedepends="wlroots0.20-devel wayland-devel wayland-protocols
  tundra-libdraw-devel"
 depends="wlroots0.20 tundra-libconf>=0.1_0 tundra-libdraw>=0.5_0"
 short_desc="Compositor of Tundra OS"
-maintainer="CarlosDZ <none@example.com>"
+maintainer="Tundra OS <CarlosDZ@tundra>"
 license="GPL-3.0-or-later"
 homepage="https://github.com/CarlosDZ/tundra-borealis"
 distfiles="https://github.com/CarlosDZ/tundra-borealis/archive/refs/tags/v${version}_${revision}.tar.gz"

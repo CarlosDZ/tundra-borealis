@@ -259,9 +259,16 @@ static void move(struct server *s, double x, double y) {
 	frame();
 }
 
-static int button(const char *how) {
+static int button(const char *how, const char *which) {
 	struct wlr_pointer_button_event e = {
-	    .pointer = &pointer, .time_msec = now_msec(), .button = BTN_LEFT};
+	    .pointer = &pointer,
+	    .time_msec = now_msec(),
+	    .button = !*which || strcmp(which, "left") == 0 ? BTN_LEFT
+	              : strcmp(which, "middle") == 0        ? BTN_MIDDLE
+	              : strcmp(which, "right") == 0         ? BTN_RIGHT
+	                                                    : 0};
+	if (!e.button)
+		return -1;
 	if (strcmp(how, "down") == 0)
 		e.state = WL_POINTER_BUTTON_STATE_PRESSED;
 	else if (strcmp(how, "up") == 0)
@@ -374,8 +381,9 @@ static int run(struct server *s, const char *line, FILE *f) {
 		move(s, x, y);
 		return 0;
 	}
-	if (sscanf(line, "button %15s", how) == 1)
-		return button(how);
+	char which[16] = "";
+	if (sscanf(line, "button %15s %15s", how, which) >= 1)
+		return button(how, which);
 	if (sscanf(line, "scroll %lf", &x) == 1) {
 		scroll(x);
 		return 0;
